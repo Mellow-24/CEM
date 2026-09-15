@@ -10,6 +10,11 @@ Group=dsh
 WorkingDirectory=/srv/cem/app
 EnvironmentFile=/etc/cem/cem.env
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=DSH_HOME=/var/lib/dsh
+Environment=DSH_CWD=/var/lib/dsh/cem-runtime
+Environment=DSH_MACAU_KNOWLEDGE_DIR=/var/lib/dsh/cem-runtime/knowledge/macau-customer-service
+Environment=DSH_MACAU_KNOWLEDGE_MANIFEST=/var/lib/dsh/cem-runtime/knowledge/macau-customer-service/source-manifest.json
+Environment=DSH_MACAU_KNOWLEDGE_INDEX=/var/lib/dsh/cem-runtime/index/macau-customer-service.index.json
 ExecStart=/usr/local/bin/node apps/cli/lib/bin.js web --patch deploy/production.cordis.patch.yml --port 3080 --trusted-host 123.57.77.176
 Restart=always
 RestartSec=5
