@@ -774,7 +774,7 @@ export class CustomerServiceAdminGateway extends TypertRemoteService {
     assertConfig(config)
     this.ragIndex = new LocalKnowledgeIndex(
       config.rag,
-      warning => { ctx.logger('customer-service-admin').warn(warning) },
+      (warning) => { ctx.logger('customer-service-admin').warn(warning) },
       reference => resolveKnowledgeCredential(ctx, reference),
     )
     this.wikiReader = new WikiReader(config.wiki)

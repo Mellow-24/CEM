@@ -19,6 +19,10 @@ packages/test-support/loader-smoke/src/*.d.ts
 packages/util/launch-environment/src/*.d.ts
 vendor/group/src/*.d.ts
 vendor/hmr/src/*.d.ts
+packages/host/customer-service-admin/tests/quality-fixture.js
+packages/host/customer-service-admin/tests/quality-fixture.js.map
+packages/host/customer-service-admin/tests/quality-fixture.d.ts
+packages/host/customer-service-admin/tests/quality-fixture.d.ts.map
 pnpm-debug.log
 *.log
 *.pid

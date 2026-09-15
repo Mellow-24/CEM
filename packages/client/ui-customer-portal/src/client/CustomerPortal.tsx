@@ -79,7 +79,7 @@ export function customerHistory(
 ): readonly CustomerHistoryItem[] {
   const archived = new Set(archivedIds)
   return list.ids
-    .flatMap(id => {
+    .flatMap((id) => {
       const item = list.byId[id]
       return item !== undefined && item.agentPreset === 'macau-customer-service' && !item.blank
         && item.origin !== 'subagent' && !archived.has(item.id)
@@ -118,7 +118,7 @@ function assistantText(blocks: AssistantBlocks): string {
 }
 
 function callsTool(blocks: AssistantBlocks): boolean {
-  return blocks.some((block) => block.kind === 'tool-call')
+  return blocks.some(block => block.kind === 'tool-call')
 }
 
 /** Project only customer-visible user prompts and completed answer prose from the full tool trace. */
@@ -353,13 +353,13 @@ function ActiveConversation({ session, send, cancel, createVoice }: {
         {snapshot.openState !== 'open'
           ? <div className={css.loading}><span /><p>正在載入對話記錄……</p></div>
           : empty
-          ? <Welcome onQuestion={(text) => { void submit(text) }} disabled={snapshot.running} />
-          : (
-            <div className={css.messageList}>
-              {messages.map(message => <MessageBubble key={message.key} message={message} />)}
-              {replyWaitPhase !== null && <ReplyWait phase={replyWaitPhase} />}
-            </div>
-          )}
+            ? <Welcome onQuestion={(text) => { void submit(text) }} disabled={snapshot.running} />
+            : (
+              <div className={css.messageList}>
+                {messages.map(message => <MessageBubble key={message.key} message={message} />)}
+                {replyWaitPhase !== null && <ReplyWait phase={replyWaitPhase} />}
+              </div>
+            )}
       </div>
       <div className={css.composerArea}>
         {visibleError !== undefined && (

@@ -548,8 +548,8 @@ describe('connection node half over a real HTTP server', () => {
         'customerServiceAdmin/overview', 'customerServiceAdmin/listDocuments',
         'customerServiceAdmin/listBadCases', 'customerServiceAdmin/searchTest',
         'customerServiceAdmin/listStagedDocuments', 'customerServiceAdmin/stageTextDocument',
-      'customerServiceAdmin/inspectConversation', 'customerServiceAdmin/startQuality',
-      'customerServiceAdmin/listQuality', 'customerServiceAdmin/getQuality', 'customerServiceAdmin/reviewQuality',
+        'customerServiceAdmin/inspectConversation', 'customerServiceAdmin/startQuality',
+        'customerServiceAdmin/listQuality', 'customerServiceAdmin/getQuality', 'customerServiceAdmin/reviewQuality',
         'agentPreset.read', 'agentPreset.copy', 'agentPreset.openDocument', 'agentPreset.remove',
       ]) {
         expect([method, await call(port, method, 'harness.example')]).toEqual([method, 403])

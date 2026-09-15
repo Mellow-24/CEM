@@ -118,10 +118,10 @@ export function OperationsSection(props: OperationsProps) {
                       <div className={css.quickGrid}>
                         {(props.standalone ? CUSTOMER_ADMIN_PAGES : OPERATION_PAGES)
                           .filter(([id]) => ['flows', 'knowledge', 'voice', 'reports'].includes(id)).map(([id, label]) => (
-                          <button key={id} onClick={() => { go(id) }}>
-                            <strong>{text(label)}</strong><span>{text(DESCRIPTIONS[id])}</span>
-                          </button>
-                        ))}
+                            <button key={id} onClick={() => { go(id) }}>
+                              <strong>{text(label)}</strong><span>{text(DESCRIPTIONS[id])}</span>
+                            </button>
+                          ))}
                       </div>
                     </section>
                   </div>
