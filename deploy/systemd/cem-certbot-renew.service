@@ -1,0 +1,9 @@
+[Unit]
+Description=Renew the CEM IP TLS certificate
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/letsencrypt/live/123.57.77.176/fullchain.pem
+
+[Service]
+Type=oneshot
+ExecStart=/opt/certbot/bin/certbot renew --quiet --deploy-hook "/usr/bin/systemctl reload nginx"
