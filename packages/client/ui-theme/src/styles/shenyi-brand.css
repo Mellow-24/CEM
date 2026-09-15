@@ -1,0 +1,98 @@
+/* Product identity layer. This follows design-platform.css so every feature
+   continues to consume the same semantic aliases while the host can carry a
+   distinct visual system. */
+body {
+  --dsy-canvas: rgb(243, 248, 246);
+  --dsy-surface: rgb(255, 255, 255);
+  --dsy-surface-raised: rgb(235, 245, 241);
+  --dsy-surface-overlay: rgb(220, 237, 230);
+  --dsy-text: rgb(16, 45, 38);
+  --dsy-text-secondary: rgb(64, 95, 85);
+  --dsy-text-tertiary: rgb(103, 132, 121);
+  --dsy-text-caption: rgb(130, 155, 145);
+  --dsy-border-subtle: rgb(15 82 67 / 8%);
+  --dsy-border: rgb(15 82 67 / 16%);
+  --dsy-border-strong: rgb(15 82 67 / 26%);
+  --dsy-jade: rgb(5, 119, 94);
+  --dsy-jade-hover: rgb(4, 93, 74);
+  --dsy-jade-soft: rgb(213, 244, 232);
+  --dsy-hover: rgb(5 119 94 / 8%);
+  --dsy-sidebar: rgb(6, 43, 36);
+  --dsy-sidebar-raised: rgb(12, 63, 53);
+  --dsy-sidebar-hover: rgb(18, 80, 67);
+  --dsy-sidebar-active: rgb(20, 92, 76);
+  --dsy-sidebar-text: rgb(240, 255, 249);
+  --dsy-sidebar-muted: rgb(171, 210, 196);
+  --dsy-sidebar-border: rgb(205 255 235 / 10%);
+  --dsy-sidebar-border-strong: rgb(205 255 235 / 17%);
+  --dsy-page-glow: rgb(157 229 198 / 34%);
+
+  --dsw-alias-bg-base: var(--dsy-canvas);
+  --dsw-alias-bg-layer-1: var(--dsy-surface);
+  --dsw-alias-bg-layer-2: var(--dsy-surface-raised);
+  --dsw-alias-bg-layer-3: var(--dsy-surface);
+  --dsw-alias-bg-module-platform: var(--dsy-surface-raised);
+  --dsw-alias-bg-multi-select: var(--dsy-surface-raised);
+  --dsw-alias-bg-overlay: var(--dsy-surface-overlay);
+  --dsw-alias-border-l1: var(--dsy-border-subtle);
+  --dsw-alias-border-l2-darkmode-thin: var(--dsy-border);
+  --dsw-alias-border-l2: var(--dsy-border);
+  --dsw-alias-border-l3: var(--dsy-border-strong);
+  --dsw-alias-border-l4: var(--dsy-border-strong);
+  --dsw-alias-brand-primary: var(--dsy-jade);
+  --dsw-alias-brand-primary-new-colorprimary-new-color: var(--dsy-jade);
+  --dsw-alias-brand-text: var(--dsy-jade);
+  --dsw-alias-button-primary-fill: var(--dsy-jade);
+  --dsw-alias-button-primary-hover: var(--dsy-jade-hover);
+  --dsw-alias-button-info-fill: var(--dsy-jade);
+  --dsw-alias-button-info-hover: var(--dsy-jade-hover);
+  --dsw-alias-button-elevated-fill: var(--dsy-surface);
+  --dsw-alias-button-floating-fill: var(--dsy-surface);
+  --dsw-alias-button-floating-hover: var(--dsy-surface-raised);
+  --dsw-alias-interactive-bg-active: var(--dsy-jade-soft);
+  --dsw-alias-interactive-bg-hover-accent: var(--dsy-jade-soft);
+  --dsw-alias-interactive-bg-hover-solid: var(--dsy-surface-raised);
+  --dsw-alias-interactive-bg-hover: var(--dsy-hover);
+  --dsw-alias-label-caption: var(--dsy-text-caption);
+  --dsw-alias-label-dimmed: var(--dsy-text-caption);
+  --dsw-alias-label-primary-bluish: var(--dsy-text);
+  --dsw-alias-label-primary-dimmed: var(--dsy-text);
+  --dsw-alias-label-primary-foreground: var(--dsy-surface);
+  --dsw-alias-label-primary-inverted: var(--dsy-surface);
+  --dsw-alias-label-primary: var(--dsy-text);
+  --dsw-alias-label-secondary: var(--dsy-text-secondary);
+  --dsw-alias-label-tertiary: var(--dsy-text-tertiary);
+  --dsw-alias-state-business-primary: var(--dsy-jade);
+  --dsw-alias-state-business-tertiary: var(--dsy-jade-soft);
+  --dsw-alias-scrollbar-bg-l1: rgb(135, 166, 154);
+  --dsw-alias-scrollbar-bg-l2: rgb(113, 147, 134);
+  --dsw-alias-scrollbar-hover-l1: rgb(77, 119, 103);
+  --dsw-alias-scrollbar-hover-l2: rgb(58, 104, 88);
+}
+
+body[data-ds-dark-theme] {
+  --dsy-canvas: rgb(10, 30, 25);
+  --dsy-surface: rgb(14, 43, 36);
+  --dsy-surface-raised: rgb(18, 54, 45);
+  --dsy-surface-overlay: rgb(28, 68, 56);
+  --dsy-text: rgb(235, 249, 242);
+  --dsy-text-secondary: rgb(183, 215, 202);
+  --dsy-text-tertiary: rgb(139, 179, 164);
+  --dsy-text-caption: rgb(111, 151, 137);
+  --dsy-border-subtle: rgb(203 255 231 / 8%);
+  --dsy-border: rgb(203 255 231 / 15%);
+  --dsy-border-strong: rgb(203 255 231 / 24%);
+  --dsy-jade: rgb(91, 205, 166);
+  --dsy-jade-hover: rgb(128, 225, 190);
+  --dsy-jade-soft: rgb(30, 93, 75);
+  --dsy-hover: rgb(154 238 204 / 10%);
+  --dsy-sidebar: rgb(4, 27, 23);
+  --dsy-sidebar-raised: rgb(9, 48, 40);
+  --dsy-sidebar-hover: rgb(14, 68, 57);
+  --dsy-sidebar-active: rgb(17, 85, 70);
+  --dsy-sidebar-text: rgb(240, 255, 249);
+  --dsy-sidebar-muted: rgb(171, 210, 196);
+  --dsy-sidebar-border: rgb(205 255 235 / 10%);
+  --dsy-sidebar-border-strong: rgb(205 255 235 / 17%);
+  --dsy-page-glow: rgb(46 152 115 / 24%);
+}

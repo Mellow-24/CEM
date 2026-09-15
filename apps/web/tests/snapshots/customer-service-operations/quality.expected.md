@@ -1,0 +1,36 @@
+- heading "六維質量評分" [level=3]
+- heading "輪 1 · 繳費方式查詢" [level=4]
+- text: 意圖為質檢事後分析
+- article:
+  - strong: 意圖理解與路徑
+  - text: 90 分
+  - paragraph: 回答與客戶問題及已記錄證據一致。
+  - 'button "證據 #2"'
+- article:
+  - strong: 檢索質量
+  - text: 75 分
+  - paragraph: 回答提到可透過澳電應用程式繳費，但涵蓋的方式有限。
+  - text: 建議： 檢查知識庫對各種繳費方式的涵蓋情況。
+  - 'button "證據 #3"'
+- article:
+  - strong: 回答準確性與依據
+  - text: 90 分
+  - paragraph: 回答與客戶問題及已記錄證據一致。
+  - 'button "證據 #6"'
+- article:
+  - strong: 處理完整性
+  - text: 90 分
+  - paragraph: 回答與客戶問題及已記錄證據一致。
+  - 'button "證據 #6"'
+- article:
+  - strong: 服務表達與語言
+  - text: 90 分
+  - paragraph: 回答與客戶問題及已記錄證據一致。
+  - 'button "證據 #6"'
+- article:
+  - strong: 執行與響應效率
+  - text: 100 分
+  - paragraph: "Verificação por regras: 0 eventos com erro e 0 operações acima de 10000 ms; não inclui tempos de voz não recolhidos."
+  - 'button "證據 #3"'
+  - 'button "證據 #6"'
+- paragraph: 語音專項：錄音、STT準確率、播報中斷和字幕對齊未採集，不參與評分。

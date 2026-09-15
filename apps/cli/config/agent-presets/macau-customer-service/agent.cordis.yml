@@ -1,0 +1,120 @@
+# The Macau customer-service agent contains its reply-language policy, persona, and automatic private retrieval.
+# Its indexer is a closure in the standing preset composition, so standard, minimal, code, and
+# Cordis sessions receive neither retrieval behavior nor its source paths or model configuration.
+
+- id: response-language
+  name: '@deepseek-ai/dsh-response-language'
+  config:
+    fallbackLanguage: yue-Hant-MO
+    verifyOutput: false
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: |-
+      你是澳门电力股份有限公司（澳电）的智能客服助手。
+
+      系统会在每条客户问题进入模型前，使用问题原文检索已审核公司知识，并附加本次问题的检索依据或无依据结果。仅可依据最新检索依据回答事实性问题；直接输出一次完整答复，不得输出“正在查询”“我来查一下”或其他过程说明。不得向客户显示文档名称、原文出处、检索编号、`[evidenceId]` 或其他检索元数据。如果依据无法回答问题，应如实说明不知道；不得猜测、虚构政策，或暗示已经执行账户操作。
+
+      知识库不提供账户余额、缴费状态、申请进度、当前供电状态、个人化二维码或其他实时数据。不得声称已报修、已转人工、已派员或已完成任何操作。涉及日期、收费、补贴、法律或监管主题时，只能说明证据明确支持的适用日期与范围，不得推断当前有效。
+
+      回答应简洁、尊重且清晰。仅当客户问题过于含糊、无法准确检索时，才提出一个聚焦的追问。运行时上下文标明客户正在实时电话通话时，遵循其中的通话表达、格式和长度要求。
+
+- id: customer-service-knowledge
+  name: '@deepseek-ai/dsh-customer-service-knowledge'
+  config:
+    sourceDirectory: !!js process.env.DSH_MACAU_KNOWLEDGE_DIR ?? `${process.env.DSH_CWD ?? process.cwd()}/knowledge/macau-customer-service`
+    sourceManifestPath: !!js process.env.DSH_MACAU_KNOWLEDGE_MANIFEST ?? `${process.env.DSH_MACAU_KNOWLEDGE_DIR ?? `${process.env.DSH_CWD ?? process.cwd()}/knowledge/macau-customer-service`}/source-manifest.json`
+    indexPath: !!js process.env.DSH_MACAU_KNOWLEDGE_INDEX ?? `${process.env.DSH_CWD ?? process.cwd()}/.dsh/macau-customer-service.index.json`
+    embeddingBaseURL: !!js process.env.DSH_MACAU_EMBEDDING_BASE_URL ?? 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    embeddingModel: !!js process.env.DSH_MACAU_EMBEDDING_MODEL ?? 'qwen3.7-text-embedding'
+    embeddingApiKeyEnv: DASHSCOPE_API_KEY
+    rerankerURL: !!js process.env.DSH_MACAU_RERANKER_URL ?? 'https://dashscope.aliyuncs.com/compatible-api/v1/reranks'
+    rerankerModel: !!js process.env.DSH_MACAU_RERANKER_MODEL ?? 'qwen3-rerank'
+    rerankerApiKeyEnv: DASHSCOPE_API_KEY
+    rerank: true
+    embeddingBatchSize: 16
+    chunkChars: 1200
+    chunkOverlapChars: 160
+    candidateCount: 12
+    resultCount: 4
+    minimumVectorScore: 0.45
+    minimumRerankScore: 0.1
+    maxQueryBytes: 4096
+    maxExcerptBytes: 4800
+    maxResultBytes: 32768
+    requestTimeoutMs: 15000
+    responseProvider: qwen-dashscope
+    responseModel: qwen3.7-flash
+    responseReasoningEffort: off
+    timeoutMs: 30000
+
+# Qwen recognition/fallback synthesis and company primary synthesis use server-side credentials.
+- id: speech-http
+  name: '@deepseek-ai/dsh-speech-http'
+  disabled: !!js "!process.env.DASHSCOPE_API_KEY"
+  config:
+    transcription:
+      profile: macau-customer-service
+      protocol: qwen-asr
+      model: qwen3-asr-flash
+      realtime:
+        url: !!js process.env.DSH_MACAU_ASR_REALTIME_URL || 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime'
+        model: qwen3-asr-flash-realtime
+        silenceMs: 250
+        threshold: 0.75
+        maxDurationMs: 3600000
+        maxBufferedBytes: 64000
+      url: !!js process.env.DSH_MACAU_ASR_URL ?? 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
+      apiKeyEnv: DASHSCOPE_API_KEY
+      mediaTypes: [audio/webm, audio/ogg, audio/wav]
+      maxBytes: 6291456
+      maxResponseBytes: 65536
+      maxTranscriptChars: 4000
+      timeoutMs: 60000
+
+- id: speech-ministream
+  name: '@deepseek-ai/dsh-speech-ministream'
+  disabled: !!js "!process.env.MACAU_MINISTREAM_TTS_TOKEN"
+  config:
+    profile: macau-customer-service
+    apiKeyEnv: MACAU_MINISTREAM_TTS_TOKEN
+    endpoint: !!js process.env.DSH_MACAU_TTS_REALTIME_URL ?? 'wss://120.209.217.11:30700/ministream-ws/tts/{client_id}'
+    defaultLanguage: yue
+    generationMode: preset_voice
+    voicePresetKey: mailinlin
+    voicePresetByLanguage:
+      zh: zh_daily_female
+      en: en_jennifer
+      pt: pt_sofia
+    maxGenerateLength: 500
+    normalize: true
+    tlsRejectUnauthorized: false
+    maxInputChars: 600
+    maxOutputBytes: 16777216
+    maxEventBytes: 2097152
+    timeoutMs: 120000
+    firstAudioTimeoutMs: 5000
+
+- id: speech-dashscope-fallback
+  name: '@deepseek-ai/dsh-speech-dashscope'
+  disabled: !!js "!process.env.DASHSCOPE_API_KEY"
+  config:
+    profile: macau-customer-service-fallback
+    apiKeyEnv: DASHSCOPE_API_KEY
+    protocol: qwen-tts
+    model: qwen3-tts-flash
+    endpoint: !!js process.env.DSH_MACAU_TTS_FALLBACK_URL ?? 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation'
+    voice: Kiki
+    defaultLanguage: yue
+    voiceByLanguage:
+      zh: Cherry
+      en: Jennifer
+      pt: Maia
+    format: wav
+    sampleRate: 24000
+    timeoutMs: 60000
+    maxInputChars: 600
+    maxOutputBytes: 2097152
+    maxResponseBytes: 4194304
+    maxEventBytes: 1048576

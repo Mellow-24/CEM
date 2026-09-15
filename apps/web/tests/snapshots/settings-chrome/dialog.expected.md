@@ -1,0 +1,71 @@
+- region "澳門電力智能客服營運管理台":
+  - navigation "澳門電力智能客服營運管理台":
+    - text: 澳門電力智能客服營運管理台
+    - button "工作台":
+      - img
+      - text: 工作台
+    - button "智能體與渠道":
+      - img
+      - text: 智能體與渠道
+    - button "對話編排":
+      - img
+      - text: 對話編排
+    - button "知識與回答":
+      - img
+      - text: 知識與回答
+    - button "模型與發音":
+      - img
+      - text: 模型與發音
+    - button "會話中心":
+      - img
+      - text: 會話中心
+    - button "質檢與評測"
+    - button "報表與大屏":
+      - img
+      - text: 報表與大屏
+    - group:
+      - text: 開發維護
+      - button "通用設定":
+        - img
+        - text: 通用設定
+      - button "模型":
+        - img
+        - text: 模型
+      - button "插件":
+        - img
+        - text: 插件
+      - button "Agent 預設":
+        - img
+        - text: Agent 預設
+  - heading "通用設定" [level=2]
+  - button "打開配置文件"
+  - button "關閉":
+    - img
+    - text: 關閉
+  - region "通用設定":
+    - text: Agent 預設 對此後新建的會話生效。運行中的會話保持它開始時的預設。
+    - button "標準模式":
+      - text: 標準模式
+      - img
+    - text: 權限 選擇新會話的預設權限模式
+    - button "Workspace Write":
+      - text: Workspace Write
+      - img
+    - text: 語言
+    - button "繁體中文":
+      - text: 繁體中文
+      - img
+    - text: 外觀
+    - button "淺色":
+      - img
+      - text: 淺色
+    - button "深色":
+      - img
+      - text: 深色
+    - button "跟隨系統" [pressed]:
+      - img
+      - text: 跟隨系統
+    - text: 繁忙時 Enter 鍵行為 僅在智能體運行時生效；Cmd/Ctrl+Enter 使用另一行為
+    - button "排隊發送":
+      - text: 排隊發送
+      - img

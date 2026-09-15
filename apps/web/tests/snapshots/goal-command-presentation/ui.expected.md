@@ -1,0 +1,24 @@
+- banner:
+  - navigation "Session hierarchy":
+    - button "workspace" [disabled]
+  - img
+  - text: Standard mode
+  - button "Session log":
+    - text: Session log
+    - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+- group "Command input": /goal
+- 'button "goal No goal is currently set. Usage: /goal [<objective>|clear|edit <objective>|pause|resume]"':
+  - img
+  - img
+  - text: "goal No goal is currently set. Usage: /goal [<objective>|clear|edit <objective>|pause|resume]"
+- textbox "Message the agent"
+- button "Commands":
+  - img
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current 深绎·迅捷":
+  - text: 深绎·迅捷
+  - img
+- button "Send message" [disabled]

@@ -1,0 +1,4 @@
+# Bilingual-pair consistency record (docs/i18n/README.md). Re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/ui-customer-service-admin/README.md
+README.md: 41bb457f742639322d9961471df98471e9cd1a93
+README.zh.md: d2360be3687f71ebacd6d864a297b95f8f4a8600

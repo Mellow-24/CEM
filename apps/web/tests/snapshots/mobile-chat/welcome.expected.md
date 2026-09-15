@@ -1,0 +1,21 @@
+- img "澳電 CEM"
+- text: 澳電智能客服
+- button "對話記錄": 對話
+- heading "您好，有甚麼可以幫您？" [level=1]
+- paragraph: 電費、繳費、用電服務，都可以問我
+- button "想直接說？ 與澳電助手通話" [disabled]:
+  - text: 想直接說？
+  - strong: 與澳電助手通話
+- heading "您可能想問" [level=2]
+- button "如何查詢本月電費？"
+- button "有哪些繳費方式？"
+- button "停電了應該怎麼辦？"
+- button "如何申請用電服務？"
+- text: 語音服務尚未就緒，您仍可使用文字聊天。
+- button "重新連接語音"
+- paragraph: 也可以按住說話
+- button "切換語音輸入"
+- textbox "輸入您的問題":
+  - /placeholder: 輸入您的問題…
+- button "發送訊息" [disabled]
+- paragraph: AI 回覆僅供參考

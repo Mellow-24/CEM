@@ -1,0 +1,53 @@
+# Agent Note: Customer-service voice calls over durable text
+
+Status: implemented
+
+English | [中文](2026-09-03-customer-service-voice-calls.zh.md)
+
+## Problem
+
+The Macau customer-service presets need live spoken questions and interruptible answers without losing their knowledge tools, language rules, or recoverable conversation history.
+
+Language and voice follow each turn’s logged `response-language/resolved` event. Calls greet in Cantonese; Auto follows question language and explicit selection takes priority. The company MiniStream provider uses the fine-tuned `mailinlin` preset for Cantonese and language-specific presets for Mandarin, English, and Portuguese. It forwards 48 kHz mono MP3 frames as they arrive. Qwen continues to provide recognition. History uses the original turn language. Text detection cannot guarantee recovery of a dialect normalized away by ASR.
+
+## Decision
+
+The browser keeps a deployment-configured microphone open throughout a full-screen call. The Host advertises echo cancellation, noise suppression, and automatic gain control as explicit call settings. AudioWorklet sends 100 ms mono PCM16 frames at 16 kHz through ordered Host uploads. A Host-owned Qwen WebSocket supplies speech onset, partial captions, and final transcripts with server VAD. The browser retains completed ASR segments beside the current partial result. Speech resumed within the configured merge grace cancels submission, and all completed segments enter ordinary Session admission as one newline-joined user message after the grace expires. Speech onset during an answer aborts that reply and stops playback. Capture continues during synthesis and playback. Only streaming-capable profiles expose the call button; the separate microphone button retains complete-recording input.
+
+Fixed greeting WAV assets load at Host startup and preload in the browser for the selected language. Clicking calls media playback synchronously while recognition connects. Greetings create no model request or durable assistant message; this avoids fabricating an assistant event outside a model step. [Protected greeting capture](../bug-fix/2026-09-07-protected-call-greeting.md) owns the opening exception: recognition events cannot interrupt the greeting, and microphone upload starts only after it ends. Customer text and assistant speech use separate labeled captions. A sentence enters the assistant caption only from its `onPlaying` event, so displayed text never leads its audio; already started captions remain after interruption. Browser `call.playbackRate` preserves pitch, with a customer-service default of 1.15×, without sending an unsupported speed control to the streaming provider. Final questions and committed answers are durable before hangup. Partial captions and raw audio remain transient. An interrupted audio answer retains its committed text in history, which is not a record of exactly how much audio the caller heard.
+
+The call observes one idle-to-completed interval rather than a per-prompt causal receipt. Its baseline includes earlier turn-end events, preventing the previous answer from completing the next question. Competing user input ends the call without cancelling the competing work. Hangup, Session changes, and transport loss cancel media and owned work; bounded audio and event queues terminate slow connections instead of replaying stale audio.
+
+The scope-aware transcription service exposes an optional streaming operation. The Qwen provider owns WebSocket authentication, protocol validation, setup and duration limits, and asynchronous socket shutdown. The Web Consumer authorizes the exact live root Agent, admits one recognizer per Session, and checks call tokens and upload sequence numbers after body reads. Routes default to loopback; explicit trusted-host authority still requires deployment access control.
+
+The [browser speech decision](2026-08-31-browser-speech-and-authorized-voice-preset.md) remains active for service separation and scope authorization. Manual playback uses committed text; calls admit validated sentences from logged live text.
+
+Calls segment assistant speech by spoken punctuation and a length bound and preload one next sentence. Layout newlines remain inside the current sentence, and the Host collapses their whitespace after validating the exact logged prefix. Internal safety splits retain source spacing in one caption instead of adding visible line breaks. The customer-service deployment uses a 160-character bound so ordinary English and Portuguese sentences do not become separate audio requests. A segment without a Unicode letter or number remains in durable text but is not sent to synthesis, preventing punctuation or trailing emoji from becoming an invalid standalone TTS request. A sentence-synthesis or playback failure aborts the current answer's remaining audio and reports a warning while recognition stays connected for the next question. The Host recovers text from the authorized Session log using turn, step, block, and prefix digest, excluding reasoning and revised prefixes. Both customer-service presets use Qwen server VAD with `threshold: 0.75` and a 250 ms silence window, then retain a 150 ms browser merge grace after a final ASR segment. Their browser input enables echo cancellation and noise suppression but disables automatic gain control so quiet ambient sound is not amplified before VAD. This targets an approximately 400 ms handoff while rejecting more background noise. They disable whole-answer language verification while retaining language instructions; other presets keep verification by default. When verification is disabled, response-language also records an exact per-step runtime-context reminder after other context. It requires the resolved writing system and register after every tool result, so Traditional Chinese or Cantonese evidence does not become a Mandarin answer merely because completed text cannot be retracted.
+
+The realtime connection installs deployment-configured `responseInstructions` as scoped runtime context on the exact live Agent and removes the contribution when the connection closes. The agent loop logs the resolved context snapshot before the model request; the next model step after hangup logs the cleared snapshot. The Macau deployment instructs call turns to lead with the direct answer, use short spoken plain text, omit reading-only formatting and evidence identifiers, select at most three relevant knowledge points, and defer the rest of a long procedure behind a follow-up question. The Wiki persona continues to require evidence for every factual claim while omitting citation markers only when this active-call context is present. Text turns retain their normal presentation and citations.
+
+## Alternatives considered
+
+**One HTTP round trip per microphone frame or an unbounded backlog.** At 100 ms per captured frame, serialized single-frame uploads accumulate stale audio whenever round trips exceed that interval. The browser instead coalesces waiting frames into its next upload while retaining order. The Host accepts 1–20 whole frames per request, forwards them individually to respect provider buffer limits, and rejects overlapping uploads to prevent interleaving. The [uplink backlog decision](../bug-fix/2026-09-14-recoverable-voice-uplink-backlog.md) keeps that two-second request limit separate from a deployment-configured total backlog interval so transient pauses recover and sustained stalls remain bounded.
+
+**Write history after hangup.** Rejected because interruption would lose accepted content and require a second model history during the call.
+
+**Send audio directly to a conversational model.** Rejected because the existing text presets own knowledge retrieval and evidence requirements.
+
+**Generate a fresh opening on every call.** Rejected because a fixed welcome does not need a model turn or another provider request before the caller hears speech. Prepared assets trade deployment-time audio updates for predictable startup.
+
+**Mount Qwen and MiniStream synthesis profiles together.** Rejected because speech resolution requires one unambiguous profile before synthesis. One MiniStream profile maps each resolved language to a preset voice, using `mailinlin` only for Cantonese.
+
+**Wait for the whole reply before playback.** Rejected because every exchange then includes the full generation delay. Sentence playback accepts that audible content cannot be retracted; interruption cancels current and prefetched audio.
+
+**Detect speech only with a browser volume threshold.** Rejected for continuous calls because quiet speech and background noise need recognition-side segmentation; Qwen VAD owns the configurable pause threshold.
+
+## Consequences
+
+Both retrieval strategies share one call UI. Browser echo cancellation reduces speaker feedback but does not guarantee interruption accuracy in every room; acoustic conditions require deployment testing. Unit tests cover cancellation completion, late synthesis, synthesis-failure isolation, non-speakable trailing segments, competing input, provider mapping, upload ordering, and resource cleanup. Browser tests exercise greeting, live capture, playback interruption, successive answers, full-screen geometry, and durable history with external providers replayed. A credential-gated real Qwen test verifies paced PCM produces onset, partial text, and a final transcript without an explicit commit. A separate credential-gated MiniStream test verifies concurrent `mailinlin` requests and progressive MP3 output.
+
+## Supersession
+
+**Superseded in part.** [Call history and continuations](../bug-fix/2026-09-14-call-history-and-continuations.md) replaces onset-only interruption and the 150 ms handoff with recognized-text interruption, an 850 ms continuation window, and explicit question carry-forward. The mobile call view retains the current call's text across turns.
+
+**Superseded in part.** [Visible call replies and TTS fallback](../bug-fix/2026-09-14-visible-call-replies-and-tts-fallback.md) replaces the caption-on-`playing`, single-synthesis-profile, and concurrent MiniStream test decisions. Generated Session text reaches the call caption immediately, the bounded next sentence is prepared only after current audio becomes audible, and a configured Qwen profile handles failures before audio begins while MiniStream remains preferred.

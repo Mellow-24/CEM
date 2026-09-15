@@ -1,0 +1,109 @@
+- dialog "澳门电力智能客服运营管理台":
+  - navigation "澳门电力智能客服运营管理台":
+    - text: 澳门电力智能客服运营管理台
+    - button "通用设置":
+      - img
+      - text: 通用设置
+    - button "模型":
+      - img
+      - text: 模型
+    - button "插件":
+      - img
+      - text: 插件
+    - button "Agent 预设":
+      - img
+      - text: Agent 预设
+    - button "运营总览":
+      - img
+      - text: 运营总览
+    - button "知识库":
+      - img
+      - text: 知识库
+    - button "会话中心":
+      - img
+      - text: 会话中心
+    - button "效果评测"
+  - heading "Agent 预设" [level=2]
+  - button "打开配置文件"
+  - button "关闭":
+    - img
+    - text: 关闭
+  - region "Agent 预设":
+    - heading "Agent 预设" [level=2]
+    - paragraph: 预设即一个会话的 Agent 所运行的插件组装 —— 它的工具、提示词与能力。复制一份既有预设改成自己的，或用「创造模式」让 Agent 帮你创建。
+    - heading "内置" [level=3]
+    - list:
+      - listitem:
+        - 'button "当前使用: 标准模式" [disabled] [pressed]':
+          - text: 标准模式 内置 当前使用 功能完整的编码 Agent，支持文件编辑、Shell、文件与网页检索、Skills、计划、目标、子代理和工作流。
+          - code: standard
+        - 'button "查看: 标准模式"':
+          - img
+          - text: 查看
+        - 'button "复制: 标准模式"':
+          - img
+          - text: 复制
+      - listitem:
+        - 'button "设为默认: PTC 模式"':
+          - text: PTC 模式 内置 具备标准模式的全部能力，并通过 Code Mode SDK 呈现工具，让模型用一个 TypeScript 程序组合多步操作。
+          - code: code
+        - 'button "查看: PTC 模式"':
+          - img
+          - text: 查看
+        - 'button "复制: PTC 模式"':
+          - img
+          - text: 复制
+      - listitem:
+        - 'button "设为默认: 极简模式"':
+          - text: 极简模式 内置 仅提供持久 bash 与 str_replace_editor 的双工具编码 Agent。
+          - code: minimal
+        - 'button "查看: 极简模式"':
+          - img
+          - text: 查看
+        - 'button "复制: 极简模式"':
+          - img
+          - text: 复制
+      - listitem:
+        - 'button "设为默认: 创造模式"':
+          - text: 创造模式 内置 用于创建自定义 Agent preset：具备标准模式的全部能力，并提供运行时检查、插件实验和 preset 创作指导。
+          - code: cordis
+        - 'button "查看: 创造模式"':
+          - img
+          - text: 查看
+        - 'button "复制: 创造模式"':
+          - img
+          - text: 复制
+      - listitem:
+        - 'button "设为默认: 澳门智能客服"':
+          - text: 澳门智能客服 内置 基于本机向量知识库的多语言客服 Agent；支持 Auto 或固定回复语言，仅依据可引述的公司资料回答。
+          - code: macau-customer-service
+        - 'button "查看: 澳门智能客服"':
+          - img
+          - text: 查看
+        - 'button "复制: 澳门智能客服"':
+          - img
+          - text: 复制
+      - listitem:
+        - 'button "设为默认: 澳门智能客服 · LLM Wiki"':
+          - text: 澳门智能客服 · LLM Wiki 内置 通过已审核的互联 Wiki 页面与原始证据进行多步导航，并支持 Auto 或固定回复语言的多语言客服 Agent。
+          - code: macau-customer-service-wiki
+        - 'button "查看: 澳门智能客服 · LLM Wiki"':
+          - img
+          - text: 查看
+        - 'button "复制: 澳门智能客服 · LLM Wiki"':
+          - img
+          - text: 复制
+      - listitem:
+        - 'button "设为默认: 香港风水顾问"':
+          - text: 香港风水顾问 内置 以香港粤语提供风水文化娱乐与一般生活建议的虚拟 AI；不冒充真人，不替代专业意见。
+          - code: hk-feng-shui
+        - 'button "查看: 香港风水顾问"':
+          - img
+          - text: 查看
+        - 'button "复制: 香港风水顾问"':
+          - img
+          - text: 复制
+    - heading "自定义" [level=3]
+    - button "用「创造模式」创作自定义预设":
+      - img
+      - text: 用「创造模式」创作自定义预设

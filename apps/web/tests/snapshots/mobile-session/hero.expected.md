@@ -1,0 +1,28 @@
+- banner:
+  - text: 深绎未来 · 移动助手
+  - strong: 开始一段新对话
+  - link "网页版":
+    - /url: /
+- region "当前对话":
+  - heading "有什么想和我聊聊？" [level=1]
+  - paragraph: 对话记录自动保存，随时回来继续。
+  - button "Choose workspace":
+    - img
+    - text: workspace
+    - img
+  - button "Standard mode":
+    - img
+    - text: Standard mode
+    - img
+  - textbox "Describe what you want to build"
+  - button "Commands":
+    - img
+  - 'button "Access mode, current: Workspace Write"'
+  - button "Select model, current 深绎·迅捷":
+    - text: 深绎·迅捷
+    - img
+  - button "Send message" [disabled]
+- navigation "手机导航":
+  - button "对话"
+  - button "会话与设置"
+  - button "执行详情" [disabled]

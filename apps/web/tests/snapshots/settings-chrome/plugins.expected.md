@@ -1,0 +1,6 @@
+- listitem:
+  - button "ui-settings, 已掛載, 已啟用":
+    - strong: ui-settings
+    - img "已掛載"
+    - text: 已啟用
+    - img

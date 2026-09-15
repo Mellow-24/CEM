@@ -1,0 +1,9 @@
+/* Trigger row label (the shell's button provides layout/colors; the label
+ * only guards against overflow during the sidebar collapse crossfade). */
+
+.triggerLabel {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.brandMark { display: block; width: 36px; height: 36px; line-height: 36px; text-align: center; border: 1px solid currentColor; border-radius: 10px; font-size: 24px; margin-bottom: 14px; }

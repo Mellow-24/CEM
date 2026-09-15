@@ -1,0 +1,17 @@
+- text: 質量營運 · 證據可追溯
+- heading "會話質檢工作台" [level=2]
+- paragraph: 自動評分、人工覆核與整改記錄分別保留。歷史質檢不會修改原始對話。
+- button "刷新質檢任務"
+- button "質檢任務" [pressed]
+- button "待覆核與整改"
+- button "評分規則"
+- table:
+  - rowgroup:
+    - row "會話 / 評估時間 自動評分 覆核 / 整改 操作":
+      - columnheader "會話 / 評估時間"
+      - columnheader "自動評分"
+      - columnheader "覆核 / 整改"
+      - columnheader "操作"
+  - rowgroup
+- text: 暫無質檢任務。
+- button "選擇會話開始質檢"

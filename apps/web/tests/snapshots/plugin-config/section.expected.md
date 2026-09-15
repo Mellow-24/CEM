@@ -1,0 +1,50 @@
+- dialog "澳门电力智能客服运营管理台":
+  - navigation "澳门电力智能客服运营管理台":
+    - text: 澳门电力智能客服运营管理台
+    - button "通用设置":
+      - img
+      - text: 通用设置
+    - button "模型":
+      - img
+      - text: 模型
+    - button "插件":
+      - img
+      - text: 插件
+    - button "Agent 预设":
+      - img
+      - text: Agent 预设
+    - button "运营总览":
+      - img
+      - text: 运营总览
+    - button "知识库":
+      - img
+      - text: 知识库
+    - button "会话中心":
+      - img
+      - text: 会话中心
+    - button "效果评测"
+  - heading "插件" [level=2]
+  - button "打开配置文件"
+  - button "关闭":
+    - img
+    - text: 关闭
+  - region "插件":
+    - heading "插件" [level=2]
+    - paragraph: 配置和查看本部署已安装的插件。
+    - tablist "插件视图":
+      - tab "插件配置" [selected]
+      - tab "插件列表"
+    - tabpanel "插件配置":
+      - list:
+        - listitem:
+          - 'button "展开设置: 终端"':
+            - text: 终端 限制 agent 运行的每一条命令。
+            - img
+        - listitem:
+          - 'button "展开设置: Agent 循环"':
+            - text: Agent 循环 Agent 如何派发工具调用。
+            - img
+        - listitem:
+          - 'button "展开设置: 网页搜索"':
+            - text: 网页搜索 DeepSeek 搜索提供方。
+            - img

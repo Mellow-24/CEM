@@ -1,0 +1,356 @@
+/* Operations-console shell: the sidebar trigger keeps the compact sidebar
+   rhythm while the modal workspace fills the viewport inside a 16px edge.
+   The navigation and active section scroll independently. */
+
+/* Trigger row: match the other wide sidebar controls' compact vertical rhythm. */
+.trigger {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% + 8px);
+  height: 34px;
+  margin: 4px -4px 4px;
+  padding: 6px 2px 6px 10px;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.trigger:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.trigger:focus-visible,
+.navCell:focus-visible,
+.close:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+}
+
+/* Rail trigger: the same 36x36 circle box as the other rail controls. */
+.trigger.rail {
+  width: 36px;
+  height: 36px;
+  margin: 8px 0 10px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.triggerLabel {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Full-viewport layer. Ordinary Settings uses the modal mask; the
+   customer-service operations console occupies this layer as a page. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 16px;
+}
+
+.fullPage {
+  display: block;
+  padding: 0;
+  background: var(--dsy-canvas);
+}
+
+.mask {
+  position: absolute;
+  inset: 0;
+  background: var(--dsw-alias-bg-mask-1);
+  backdrop-filter: var(--dsw-mask-blur);
+}
+
+/* Every section receives the same near-full-viewport workspace. The stable
+   geometry keeps navigation still while sections with different heights
+   scroll inside the content column. */
+.panel {
+  --dsw-alias-bg-base: var(--dsy-canvas);
+  --dsw-alias-bg-layer-1: var(--dsy-surface);
+  --dsw-alias-bg-layer-2: var(--dsy-surface-raised);
+  --dsw-alias-bg-layer-3: var(--dsy-surface);
+  --dsw-alias-bg-overlay: var(--dsy-surface-overlay);
+  --dsw-alias-border-l1: var(--dsy-border-subtle);
+  --dsw-alias-border-l2: var(--dsy-border);
+  --dsw-alias-border-l2-darkmode-thin: var(--dsy-border);
+  --dsw-alias-border-l3: var(--dsy-border-strong);
+  --dsw-alias-label-primary: var(--dsy-text);
+  --dsw-alias-label-secondary: var(--dsy-text-secondary);
+  --dsw-alias-label-tertiary: var(--dsy-text-tertiary);
+  --dsw-alias-label-caption: var(--dsy-text-caption);
+  --dsw-alias-label-primary-inverted: var(--dsy-surface);
+  --dsw-alias-interactive-bg-hover: var(--dsy-hover);
+  --dsw-alias-button-primary-fill: var(--dsy-jade);
+  --dsw-alias-button-primary-hover: var(--dsy-jade-hover);
+  --dsw-alias-state-business-primary: var(--dsy-jade);
+  --dsw-alias-state-business-tertiary: var(--dsy-jade-soft);
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-shadow-lv3);
+  /* Elevated surface: the scrollbar thumb takes the l2 elevation tokens.
+     Declared on the panel rather than the scrolling `.options` child so the
+     elevation choice sits with the surface; the custom properties inherit
+     down to whichever descendant scrolls (see ui-theme
+     styles/scrollbar.css for the rebinding contract). */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.fullPage .panel {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* The rail has its own scroll area so a deployment can register many
+   independent settings sections without moving the console chrome. */
+.nav {
+  --dsw-alias-bg-base: var(--dsy-sidebar);
+  --dsw-alias-label-primary: rgb(248, 255, 251);
+  --dsw-alias-label-secondary: rgb(221, 244, 235);
+  --dsw-alias-label-tertiary: rgb(195, 228, 216);
+  --dsw-alias-interactive-bg-hover: var(--dsy-sidebar-hover);
+  --dsw-specific-sidebar-fill: var(--dsy-sidebar);
+  --dsw-specific-sidebar-nav-item-hover: var(--dsy-sidebar-hover);
+  --dsw-specific-sidebar-nav-item-active: rgb(234, 251, 243);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 232px;
+  min-height: 0;
+  padding: 24px 16px 16px;
+  box-sizing: border-box;
+  border-right: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-specific-sidebar-fill);
+}
+
+.navTitle {
+  flex: none;
+  padding: 2px 12px 8px;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.navList {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 2px 8px 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.maintenance { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 20px; }
+.maintenance summary { cursor: pointer; padding: 10px 14px; }
+.maintenance .navCell { width: 100%; font-size: 12px; min-height: 36px; }
+
+.navCell {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 14px;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+}
+
+.navCell:hover {
+  background: var(--dsw-specific-sidebar-nav-item-hover);
+}
+
+.navCell.active {
+  background: var(--dsw-specific-sidebar-nav-item-active);
+  color: var(--dsy-sidebar);
+  font-weight: 500;
+}
+
+.navCell.active::before {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 4px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--dsw-alias-state-business-primary);
+  content: '';
+}
+
+.navIcon {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.navCell.active .navIcon {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.navLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 18px 24px 17px 28px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.sectionTitle {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  color: var(--dsw-alias-label-primary);
+}
+
+.close:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.options {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 28px 32px 32px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* Visually-hidden text seat (close button accessible name from slot content). */
+.hiddenLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .overlay {
+    padding: 0;
+  }
+
+  .panel {
+    border: none;
+    border-radius: 0;
+  }
+
+  .nav {
+    width: 184px;
+    padding: 18px 10px 10px;
+  }
+
+  .navTitle {
+    padding-inline: 10px;
+    font-size: 17px;
+    line-height: 24px;
+  }
+
+  .navCell {
+    gap: 8px;
+    padding-inline: 12px;
+  }
+
+  .header {
+    min-height: 64px;
+    padding: 14px 14px 13px 18px;
+  }
+
+  .sectionTitle {
+    font-size: 18px;
+    line-height: 26px;
+  }
+
+  .options {
+    padding: 22px 18px 24px;
+  }
+}

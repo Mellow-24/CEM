@@ -1,0 +1,11 @@
+- dialog "Customer service voice call":
+  - banner: LIVE · AI CUSTOMER SERVICE {{clock}}
+  - main:
+    - heading "Customer service voice call" [level=2]
+    - status: Speaking…
+    - text: Assistant
+    - paragraph: 你好，我係澳電智能客服，請問有咩可以幫到你？
+  - contentinfo:
+    - paragraph: Speak after the greeting. You can interrupt any answer.
+    - button "End call"
+    - text: End call Submitted messages stay in this conversation

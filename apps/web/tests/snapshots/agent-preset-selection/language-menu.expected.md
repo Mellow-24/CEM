@@ -1,0 +1,10 @@
+- menu:
+  - menuitem "Auto":
+    - text: Auto
+    - img
+  - menuitem "简体中文"
+  - menuitem "繁體中文"
+  - menuitem "澳門粵語"
+  - menuitem "香港粵語"
+  - menuitem "English"
+  - menuitem "Português"

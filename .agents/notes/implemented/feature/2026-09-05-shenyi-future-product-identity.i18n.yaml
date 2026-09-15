@@ -1,0 +1,4 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority.
+2026-09-05-shenyi-future-product-identity.md: 47546bc11db097c9d299a663943f158e352673c3
+2026-09-05-shenyi-future-product-identity.zh.md: 895fce928fe964b66f992ea1d5852f2bcb6d78e8

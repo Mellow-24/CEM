@@ -1,0 +1,4 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority.
+2026-09-14-dashscope-customer-model-plane.md: 4b6512325e784fd89b2387fcbec3d114cb3a1930
+2026-09-14-dashscope-customer-model-plane.zh.md: ea0a0f174cdfe49a14467e03775704aada92b3e6

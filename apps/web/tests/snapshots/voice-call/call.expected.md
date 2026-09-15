@@ -1,0 +1,13 @@
+- dialog "Customer service voice call":
+  - banner: LIVE · AI CUSTOMER SERVICE {{clock}}
+  - main:
+    - heading "Customer service voice call" [level=2]
+    - status: Speaking…
+    - text: You
+    - paragraph: 我现在的自动转账 失败了怎么办？
+    - text: Assistant
+    - paragraph: 自动转账失败，常见原因是账单已过期或银行账户余额不足。请先确认转账当天账户里有足够资金，也可以联系开户银行查询。需要进一步协助的话，请联系在线客服。
+  - contentinfo:
+    - paragraph: Speak after the greeting. You can interrupt any answer.
+    - button "End call"
+    - text: End call Submitted messages stay in this conversation

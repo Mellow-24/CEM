@@ -1,0 +1,47 @@
+.frame {
+  position: absolute;
+  top: var(--mobile-top, 0px);
+  left: 0;
+  right: 0;
+  height: var(--mobile-height, 100dvh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+}
+
+.header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.brand {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.heading { flex: 1; min-width: 0; }
+.heading span { display: block; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 18px; }
+.heading strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; line-height: 24px; }
+.desktop { display: grid; place-items: center; min-height: 44px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 20px; text-decoration: none; }
+.panel { flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.panel[hidden] { display: none; }
+.sessions > :global([data-slot='sidebar']) { height: 100%; }
+.navigation { display: flex; flex: none; gap: 6px; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-1); }
+.navigation button { flex: 1; min-height: 44px; border: 0; border-radius: 16px; color: var(--dsw-alias-label-secondary); background: transparent; font: inherit; font-size: 13px; line-height: 20px; cursor: pointer; }
+.navigation button[aria-current] { background: var(--dsw-alias-state-business-tertiary); color: var(--dsw-alias-state-business-primary); font-weight: 600; }
+.navigation button:disabled { opacity: .4; cursor: default; }
+.navigation button:focus-visible, .desktop:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: -2px; }
+.overlays { position: absolute; inset: 0; pointer-events: none; }
+.overlays > * { pointer-events: auto; }

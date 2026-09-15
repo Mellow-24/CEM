@@ -1,0 +1,10 @@
+- menu:
+  - menuitem "Standard mode Full coding agent with file editing, shell, file and web search, skills, planning, goals, subagents, and workflows.":
+    - text: Standard mode Full coding agent with file editing, shell, file and web search, skills, planning, goals, subagents, and workflows.
+    - img
+  - menuitem "Code mode All Standard mode capabilities, with tools exposed through the Code Mode SDK so the model can combine multi-step operations in one TypeScript program."
+  - menuitem "Minimal mode Two-tool coding agent with persistent bash and str_replace_editor."
+  - menuitem "Creator mode Built for creating custom agent presets, with all Standard mode capabilities plus runtime inspection, plugin experiments, and preset-authoring guidance."
+  - menuitem "Macau customer service Multilingual customer-service agent with Auto or fixed reply language, grounded in a local vector knowledge base and citeable company sources."
+  - menuitem "Macau customer service · LLM Wiki Multilingual customer-service agent with Auto or fixed reply language that navigates reviewed linked Wiki pages and raw evidence over multiple steps."
+  - menuitem "Hong Kong feng shui adviser Virtual Hong Kong Cantonese feng shui culture adviser for entertainment and general lifestyle guidance; never impersonates a real person or substitutes for professional advice."

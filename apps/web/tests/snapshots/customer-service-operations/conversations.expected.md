@@ -1,0 +1,21 @@
+- paragraph: 会话中心
+- heading "客服会话" [level=2]
+- paragraph: 查看真实会话列表，并回到对话界面完整回放。
+- text: 历史会话
+- strong: "0"
+- text: 当前目录中的历史记录 正在处理
+- strong: "0"
+- text: 依据会话实时运行状态 已使用预设
+- strong: "0"
+- text: 按历史会话统计 筛选结果
+- strong: "0"
+- text: 与搜索和状态筛选联动
+- paragraph: 数据范围：当前会话目录，包含其他业务预设；可用预设筛选。
+- searchbox "搜索会话 ID、预设或工作目录"
+- combobox "筛选服务预设":
+  - option "全部" [selected]
+- group "会话状态":
+  - button "全部"
+  - button "处理中" [pressed]
+  - button "空闲"
+- paragraph: 暂无客服会话。

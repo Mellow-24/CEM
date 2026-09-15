@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write knowledge/macau-customer-service-eval/README.md
+README.md: e96033a42ec802f894946d4e2f7312ce65c954ec
+README.zh.md: 4eda35f00a1eb520b013fc2b205fe80eae04b49b

@@ -1,0 +1,46 @@
+- dialog "澳门电力智能客服运营管理台":
+  - navigation "澳门电力智能客服运营管理台":
+    - text: 澳门电力智能客服运营管理台
+    - button "通用设置":
+      - img
+      - text: 通用设置
+    - button "模型":
+      - img
+      - text: 模型
+    - button "插件":
+      - img
+      - text: 插件
+    - button "Agent 预设":
+      - img
+      - text: Agent 预设
+    - button "运营总览":
+      - img
+      - text: 运营总览
+    - button "知识库":
+      - img
+      - text: 知识库
+    - button "会话中心":
+      - img
+      - text: 会话中心
+    - button "效果评测"
+  - heading "模型" [level=2]
+  - button "打开配置文件"
+  - button "关闭":
+    - img
+    - text: 关闭
+  - region "模型":
+    - heading "模型" [level=2]
+    - paragraph: 填入各提供方的 API 密钥即可使用其模型。
+    - status: 已保存 minimax-cn。
+    - list:
+      - listitem:
+        - text: minimax-cn
+        - img "API 密钥已配置"
+        - button "编辑 minimax-cn": 编辑
+        - button "删除 minimax-cn": 删除
+    - button "添加提供方":
+      - img
+      - text: 添加提供方
+    - button "添加自定义提供方":
+      - img
+      - text: 添加自定义提供方

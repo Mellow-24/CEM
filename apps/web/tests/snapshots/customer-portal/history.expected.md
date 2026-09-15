@@ -1,0 +1,12 @@
+- complementary "過往對話":
+  - text: 1 條記錄
+  - strong: 過往對話
+  - button "新對話":
+    - img
+    - text: 新對話
+  - navigation "客服對話記錄":
+    - button "開啟對話：Reply with the single word":
+      - img
+      - text: Reply with the single word {{clock}}
+    - button "刪除對話：Reply with the single word":
+      - img

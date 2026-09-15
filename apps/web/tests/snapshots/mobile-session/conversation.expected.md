@@ -1,0 +1,50 @@
+- banner:
+  - text: 深绎未来 · 移动助手
+  - strong: 请运行一次工具，然后回答我
+  - link "网页版":
+    - /url: /
+- region "当前对话":
+  - navigation "Session hierarchy":
+    - button "请运行一次工具，然后回答我" [disabled]
+  - img
+  - text: Standard mode
+  - button "Session log":
+    - text: Session log
+    - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+  - text: 请运行一次工具，然后回答我。 {{clock}}
+  - button "Copy":
+    - img
+  - button "Context injection @deepseek-ai/dsh-system-prompt":
+    - img
+    - img
+    - text: Context injection @deepseek-ai/dsh-system-prompt
+  - button "Bash Mobile tool check":
+    - img
+    - img
+    - text: Bash Mobile tool check
+  - paragraph: 手机端已收到请求。工具执行完成：MOBILE_TOOL_OK
+  - button "Copy":
+    - img
+  - button "Good response":
+    - img
+  - button "Bad response":
+    - img
+  - button "Branch into a new conversation":
+    - img
+  - text: {{clock}} Ran for {{duration}} TTFT {{duration}}
+  - textbox "Message the agent"
+  - button "Commands":
+    - img
+  - 'button "Access mode, current: Workspace Write"'
+  - button "Select model, current 深绎·迅捷":
+    - text: 深绎·迅捷
+    - img
+  - button "Send message" [disabled]
+  - text: 1 turns · 2 steps LLM {{duration}} · Tool call {{duration}} TTFT avg {{duration}}
+- navigation "手机导航":
+  - button "对话"
+  - button "会话与设置"
+  - button "执行详情"

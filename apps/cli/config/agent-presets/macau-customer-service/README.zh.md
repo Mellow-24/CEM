@@ -1,0 +1,41 @@
+# 澳门客服语音通话
+
+[English](README.md) | 中文
+
+`macau-customer-service` 和 `macau-customer-service-wiki` 均支持 Web 输入框中的语音通话按钮。知识检索与回复语言设置沿用文字会话。
+
+通话连接期间，两个预设会按电话客服方式回答：先说直接结论，只用同一段内适合朗读的纯文本短句，不输出 Markdown 或引用标记，默认两到三个短句。知识回答最多选取与当前问题最相关的两到三个要点。流程较长时先说明客户现在要做的第一步，再询问是否继续。普通文字输入仍保留适合阅读的格式，Wiki 预设在文字对话中仍显示证据引用。
+
+“自动”模式在新通话中用粤语问候，之后跟随明确的提问语言；短句不明确时沿用上一轮，缺少上下文时默认粤语。手动指定的回复语言优先。语言判断沿用现有转写文本逻辑，无法保证从被规范化的文字恢复原始方言。
+## 启动
+
+在服务端环境或根目录 `.env` 中设置 `DASHSCOPE_API_KEY` 和 `MACAU_MINISTREAM_TTS_TOKEN`，重启 Web 应用后打开任一客服预设。密钥不应放入浏览器代码。Web profile 使用同一个 DashScope 凭据调用 Qwen3.7 Plus 对话、Qwen3.7 文本向量、Qwen3 重排、语音识别和备用语音合成。
+
+```sh
+pnpm dsh --profile web
+```
+
+点击麦克风旁的电话按钮，进入全屏通话并允许麦克风权限。点击即播放预加载的欢迎语，同时连接麦克风；等待欢迎语播完后自然说话，字幕会保留已完成片段，短暂停顿后继续说的内容仍会合并成一个问题。播报期间也持续收音，有效问题或纠正经意图筛选后可以打断；短促附和及可能的扬声器回声不会停止回答。点击**挂断通话**返回聊天，问答保留在历史中，刷新后仍可查看；固定欢迎语不作为模型消息写入历史。音频录音不会保存。
+
+## 语音配置
+
+| 环境变量 | 含义 |
+|---|---|
+| `DASHSCOPE_API_KEY` | 服务端阿里云百炼凭据。 |
+| `DSH_MACAU_EMBEDDING_BASE_URL` / `DSH_MACAU_EMBEDDING_MODEL` | 可选的线上向量端点和模型覆盖值。 |
+| `DSH_MACAU_RERANKER_URL` / `DSH_MACAU_RERANKER_MODEL` | 可选的线上重排端点和模型覆盖值。 |
+| `DSH_MACAU_ASR_REALTIME_URL` | 可选的 Qwen 实时识别 WebSocket 地址；默认使用北京旧域名。 |
+| `DSH_MACAU_ASR_URL` | 可选的完整 Qwen chat-completions 地址；默认使用北京旧域名接口。 |
+| `MACAU_MINISTREAM_TTS_TOKEN` | 仅服务端使用的公司 MiniStream 试用 token。 |
+| `DSH_MACAU_TTS_REALTIME_URL` | 可选 MiniStream WebSocket 地址；默认为公司试用端点。 |
+| `DSH_MACAU_TTS_FALLBACK_URL` | 可选 Qwen3-TTS SSE 地址；默认为百炼北京端点。 |
+
+客户回答通过预设内请求路由使用非推理模式 `qwen3.7-flash`，AI 质检仍使用 `qwen3.7-plus`。Web 部署保留首个问题生成的本地确定性历史标题，并关闭并发的标题模型调用。RAG 仍先使用 `qwen3.7-text-embedding`，再通过 `qwen3-rerank` 重排；候选数、阈值和结果排序不变，Embedding 模型或端点变化会使可丢弃的向量缓存失效并重建。通话识别使用 `qwen3-asr-flash-realtime`，TTS 首选公司 MiniStream WebSocket 渐进输出 48 kHz MP3。`generationMode` 为 `preset_voice`；粤语使用算法微调音色 `mailinlin`，普通话、英语和葡语分别使用 `zh_daily_female`、`en_jennifer` 和 `pt_sofia`。MiniStream 必须在五秒内输出首个音频帧；播放前发生超时、容量拒绝或其他错误时，同一句会改用流式 Qwen3-TTS 重试，粤语、普通话、英语和葡语分别使用 Kiki、Cherry、Jennifer 和 Maia，且本次通话后续播报继续使用该降级提供方。预加载的粤语欢迎语使用 `mailinlin`。
+
+## 部署与限制
+
+欢迎语为「你好，我係澳電智能客服，請問有咩可以幫到你？」；手动选择其他语言时用该语言表达。通话默认以 1.15 倍速播放并保持音调，可在 Web bundle 的 `call.playbackRate` 中调整。
+
+通话需要支持 AudioWorklet 的现代浏览器，建议使用 Chromium。Qwen 服务端 VAD 使用 `threshold: 0.75` 过滤更多背景声，并使用 `silenceMs: 250` 加快轮次结束。客服正在播报时，浏览器会把识别到的语音作为打断候选：有效的临时文字需持续 420 毫秒，完整且有效的话轮则可立即打断。规范化后不少于六个字符且与当前回答高度相似的文字，以及短促的被动附和会作为非话轮或可能的回声丢弃。判断还会综合信息长度、字符多样性和提问或纠正句式，并非打断词白名单。接受最终文字后，浏览器再保留 850 毫秒的 `call.utteranceMergeMs` 续说窗口；窗口内重新开口会取消待提交操作，全部已完成片段以换行连接后只向 Session 提交一次。从识别到静音开始计算，正常交接等待约为 1.1 秒。浏览器继续开启回声消除与环境降噪，同时关闭自动增益，避免低电平环境声在送入服务端 VAD 前被放大。最长通话为一小时。外放音量和环境噪声仍可能影响识别与打断。通话语音以 1.15 倍速度保留音调播放。问答沿用现有检索链路，回答按句子边生成边播报，并使用 160 个字符的最大句子缓冲。当前句开始产生可听声音后，浏览器最多准备下一句，使大部分合成启动时间与当前句播放重叠，同时不会打开无界数量的实时请求。排版换行不会单独触发 TTS 请求，通话字幕也不会显示内部安全切分。模型生成的回复文字会立即显示；TTS 延迟或失败时文字仍然可见，音频播放只独立更新通话状态。检索与首句生成仍有等待时间。实时连接期间，Host 会将配置的电话回答要求作为持久化运行时上下文加入模型请求；挂断后的下一次模型步骤会清除该上下文。两个客服预设均设置 `response-language.verifyOutput: false`，保留语言提示与选择，关闭整段缓存和语言纠错重试。识别错误会停止通话；两个 TTS 提供方都失败后，识别仍可继续，且已提交文字保持可见。
+
+远程浏览器使用 HTTPS 和具备访问控制的部署。语音默认仅允许 loopback 访问；仅在同时配置 Connection 可信访问地址和部署访问控制时，设置 `speech-web.authority: trusted-host`。参见 [speech-web 配置](../../../../../packages/speech/speech-web/README.md)。地址白名单不是用户登录或租户隔离机制。

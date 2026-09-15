@@ -1,0 +1,31 @@
+/* CEM customer palette, scoped to the opt-in mobile root only. */
+[data-cem-mobile="chat"] {
+  color-scheme: light;
+  --dsw-alias-cem-paper: #fff;
+  --dsw-alias-cem-ink: #14161a;
+  --dsw-alias-cem-secondary: #72747a;
+  --dsw-alias-cem-muted: #999ba2;
+  --dsw-alias-cem-line: #eeedf0;
+  --dsw-alias-cem-stroke: #dedee2;
+  --dsw-alias-cem-orange: #ff480b;
+  --dsw-alias-cem-orange-deep: #da3800;
+  --dsw-alias-cem-yellow: #ffd221;
+  --dsw-alias-cem-soft: #fff5e9;
+  --dsw-alias-cem-soft-line: #ffd8b6;
+  --dsw-alias-cem-user: #ffe5be;
+  --dsw-alias-cem-assistant: #f5f5f6;
+  --dsw-alias-cem-red: #ec211e;
+  --dsw-alias-cem-error: #9d251b;
+  --dsw-alias-cem-error-bg: #fff0ea;
+  --dsw-alias-cem-wave: #ffad39;
+  --dsw-alias-cem-overlay: #26201650;
+  --dsw-alias-cem-ring-outer: #fff6e6;
+  --dsw-alias-cem-ring-middle: #ffedcc;
+  --dsw-alias-cem-ring-inner: #ffe0a0;
+  --dsw-alias-cem-shadow: 0 3px 20px #30281c09;
+  --dsw-alias-cem-orb-shadow: 0 4px 18px #ffb63836;
+  --dsw-alias-cem-brand-gradient: linear-gradient(145deg, #ff650f, #ff3d00);
+  --dsw-alias-cem-soft-gradient: linear-gradient(145deg, #fff8ed, #fff2df);
+  --dsw-alias-cem-fade: linear-gradient(180deg, #fff0, #fff 92%);
+  --dsw-alias-cem-font: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+}

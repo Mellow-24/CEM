@@ -1,0 +1,250 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "path": "01-故障報修-01-Inzone-01.md",
+      "hash": "203c0d968656b7dc934af71fcc423d8be21af8fcd3172ca206ff84ccdc2c63ed",
+      "size": 2602
+    },
+    {
+      "path": "01-故障報修-02-unplanned-01.md",
+      "hash": "c2fc365dc4d1dd5c45830f0624bcff7cee7f1c96f4e9652d479b34f1027ea233",
+      "size": 517
+    },
+    {
+      "path": "01-故障報修-03-危急機制-01.md",
+      "hash": "aa7b4b402087298eede8201f858e8024ccb42294902363a3283f569f8ee1965a",
+      "size": 1096
+    },
+    {
+      "path": "01-故障報修-04-颱風及搶修-01.md",
+      "hash": "83c4b93133e5a919adeb8c9a57e466d04a8da5b9ff2ef2a78aa3231e27594859",
+      "size": 4112
+    },
+    {
+      "path": "02-賬單問題-01-一般-01.md",
+      "hash": "4a2a6fa58e6bf83b74111610ba8346e5077b2f3face5182bfecb0429ba2f339b",
+      "size": 1469
+    },
+    {
+      "path": "02-賬單問題-02-估數賬單-01.md",
+      "hash": "7d26b63a3748ad30ad399ca61331ddb1ca00a73b4695773dce3594b23e423f41",
+      "size": 7281
+    },
+    {
+      "path": "02-賬單問題-03-優惠計劃-01.md",
+      "hash": "f0eae22ae1ed198d33728b3f923d85b6e1b95633776f6249e44a5a246ec079fd",
+      "size": 2955
+    },
+    {
+      "path": "02-賬單問題-04-其他-01.md",
+      "hash": "25e86ac667c1828934289f0a8d95b29aa5d87d24339ad0149e1ef2d3fd6928eb",
+      "size": 942
+    },
+    {
+      "path": "02-賬單問題-05-合約號碼-01.md",
+      "hash": "8976dcd7654155018134149c02f07546282885a18abfb32baf9ac5b738d2b308",
+      "size": 2238
+    },
+    {
+      "path": "02-賬單問題-06-收取賬單-01.md",
+      "hash": "d9adbf61822bea10081102dd713a30b32d6832d9dc5561b14e0838991380a83a",
+      "size": 7440
+    },
+    {
+      "path": "02-賬單問題-07-收取電子賬單-01.md",
+      "hash": "eb1aba74638743fd0abf50db1937b266458a6d37645e3ef24434417d7e872a02",
+      "size": 5395
+    },
+    {
+      "path": "02-賬單問題-08-收費組別-01.md",
+      "hash": "7b80382799c4f525a9f3312bb4855918d4b26fec8341968bceaaadd2f955aac1",
+      "size": 3127
+    },
+    {
+      "path": "02-賬單問題-09-政府電費補貼-01.md",
+      "hash": "6ba35fcb9c26dff416548d1af6e6723c0101c739d657e380c05260f6629f0652",
+      "size": 7432
+    },
+    {
+      "path": "02-賬單問題-09-政府電費補貼-02.md",
+      "hash": "3fddfaeb2a5eb6041a3314ecbf1ce95a9b319bc0867ec1cc25bcf9a52a5044b3",
+      "size": 857
+    },
+    {
+      "path": "02-賬單問題-10-查詢賬單-01.md",
+      "hash": "d5a0a7cdfea5d3b941dfcb88d56c47ca1183efae6d9d7539222c165795be55fd",
+      "size": 7423
+    },
+    {
+      "path": "02-賬單問題-10-查詢賬單-02.md",
+      "hash": "de3063e6bad03105f23829543ae17e570aebadbed6d73500675a11f65f36710d",
+      "size": 1457
+    },
+    {
+      "path": "02-賬單問題-11-查詢過往賬單-01.md",
+      "hash": "d6058e951306110849645f7fa48500753d2c0c2a2059fbd9907a73e5ac27c9bf",
+      "size": 758
+    },
+    {
+      "path": "02-賬單問題-12-欠費復電處理-01.md",
+      "hash": "b16b946a209742254ff95e6892d2adcd5c4340ecfaa0a943370f4886fa1368a2",
+      "size": 856
+    },
+    {
+      "path": "02-賬單問題-13-繳費-01.md",
+      "hash": "6536044a1d98c83896887da17d47d40bd51e1b355231f961c88c4732b06d7895",
+      "size": 7314
+    },
+    {
+      "path": "02-賬單問題-13-繳費-02.md",
+      "hash": "ff5139e1dced3d59d5d9e8198327a71f2fba1167c4eae45bae1d0b14186080e5",
+      "size": 6820
+    },
+    {
+      "path": "02-賬單問題-14-繳費提示-01.md",
+      "hash": "5507d504011ca25466c7d825fe33aa002b5707fcd1ebe32f01e40d0c40650e0b",
+      "size": 785
+    },
+    {
+      "path": "02-賬單問題-15-自動轉賬-01.md",
+      "hash": "c566f91bd57db73150462792aa5688a5f4ea17f3218333976108aa053af58442",
+      "size": 7041
+    },
+    {
+      "path": "02-賬單問題-16-自報賬單-01.md",
+      "hash": "6d6b412658f578637335d22603929e825604e39a1b78386317956659b2f78a80",
+      "size": 854
+    },
+    {
+      "path": "02-賬單問題-17-電力裝置-01.md",
+      "hash": "ac3af1b98f8c697ccdd728858f477f7fcbefc9ef0274a4b7e7152e9c9d8d2144",
+      "size": 1932
+    },
+    {
+      "path": "02-賬單問題-18-電費金額計算-01.md",
+      "hash": "b1b4512b52a18d300c73f9a7b8bcc034e0a403117c218066c92325361cb23aa9",
+      "size": 2506
+    },
+    {
+      "path": "02-賬單問題-19-電錶-01.md",
+      "hash": "3fedb1d097da7ecf9c89c5ed4e7a89e2a469ca87e5056575c9e56fd8a16cdaf5",
+      "size": 4851
+    },
+    {
+      "path": "03-申請問題-01-優惠計劃-01.md",
+      "hash": "602b9099ddce84cc57b304e43c6b72dea6857b0ba1e2931eb1aafdda1140d11a",
+      "size": 1392
+    },
+    {
+      "path": "03-申請問題-02-加大電錶-01.md",
+      "hash": "c0cdf9fd25eb2db53f8e6ee697a2e922afdac3e30bd647f24e1358fd43691251",
+      "size": 1269
+    },
+    {
+      "path": "03-申請問題-03-合約轉名-01.md",
+      "hash": "dd9ec09641f21a5b22f1973fd5bf8bf9ef0b4f9afaf3abbd7cd90a1ec9246392",
+      "size": 1121
+    },
+    {
+      "path": "03-申請問題-04-新供電-轉名-01.md",
+      "hash": "93fc6941e28edc2072d779b1da031e0765c4db7abc0b7a79a1427ad22d8eb9a5",
+      "size": 1440
+    },
+    {
+      "path": "03-申請問題-05-查詢申請-01.md",
+      "hash": "a68391162228ea614a5c82750498868dd7a4347a3089efbb83b3eac8fc28180e",
+      "size": 628
+    },
+    {
+      "path": "03-申請問題-06-申請供電-01.md",
+      "hash": "97c2af7292fea3cb2419083ec0f92c38f37d40a5a680109a85fa9b91314f5ba3",
+      "size": 666
+    },
+    {
+      "path": "03-申請問題-07-終止合約-01.md",
+      "hash": "7e8269ee267311897bb029b0922dc8b1b5d66e72b42db21433ed4654dfed093e",
+      "size": 2661
+    },
+    {
+      "path": "03-申請問題-08-繳費-01.md",
+      "hash": "8c071431f25448554c212213f2f99d3ca9ef70513739f81f514bb15bb0b05b96",
+      "size": 792
+    },
+    {
+      "path": "03-申請問題-09-退還按金-01.md",
+      "hash": "336317fd6f49d4840dcef51f2a24bbcfc7fae929d5a25d5b374189ea482d1c53",
+      "size": 656
+    },
+    {
+      "path": "03-申請問題-10-電錶移位-01.md",
+      "hash": "9a9308a09ee1758b25f8da810025b3b5352cc08ecbab73b41d7c5343f79e89c1",
+      "size": 777
+    },
+    {
+      "path": "04-電動車-01-充電流程-01.md",
+      "hash": "7e3dbb62a9f2032c7dead10565896e2845041e33b9533c248ee9dfa7fe6c79fe",
+      "size": 7209
+    },
+    {
+      "path": "04-電動車-02-充電繳費-01.md",
+      "hash": "6e88094e9bd6cf66d1a0ecb9dbe34445c078dab062c46a7567d67cfff8051131",
+      "size": 6154
+    },
+    {
+      "path": "04-電動車-03-充電資訊-01.md",
+      "hash": "e6ee069be36f4f361f859900d4c457a2e47845f4f431d7e74c1a7ad94b263526",
+      "size": 7765
+    },
+    {
+      "path": "04-電動車-03-充電資訊-02.md",
+      "hash": "4c424cbf76f02525de571ac9d9408371dddf5f8b46872a3f7efa4a4b686d247b",
+      "size": 927
+    },
+    {
+      "path": "05-澳電知識點-01-一般-01.md",
+      "hash": "9080c8a0083af30d6ff1388a5a3bb40ba019d1cf16312d81024f8771a5849135",
+      "size": 7525
+    },
+    {
+      "path": "05-澳電知識點-01-一般-02.md",
+      "hash": "fc8d335dacad5f80474715ed2d8105a23927bf61a7221a6de74b59e285b29307",
+      "size": 7617
+    },
+    {
+      "path": "05-澳電知識點-01-一般-03.md",
+      "hash": "f6bc83e11250a1c5cf18fb69950a55cb274ca44d7cef8f389ff9b95d9dc1cfd8",
+      "size": 4220
+    },
+    {
+      "path": "06-水公司業務-01-新供電-轉名-01.md",
+      "hash": "0ed0368dd69904a7ecbdc0e52bfddf87169e5ae6e54c2f9334596d1736b75f6f",
+      "size": 513
+    },
+    {
+      "path": "06-水公司業務-02-查詢賬單-01.md",
+      "hash": "b77fdfc30e2f078a760cab1dcca169c8b9c17947120e0d299f91d90bc5087b0c",
+      "size": 757
+    },
+    {
+      "path": "06-水公司業務-03-繳費-01.md",
+      "hash": "d714cf27e7ffe411ee1e2ed61f4e0d5832ed88ced0d601c5794eb57ba65ade8d",
+      "size": 467
+    },
+    {
+      "path": "07-其他業務-01-CEM-APP-01.md",
+      "hash": "257aab98c83b4ac6566ea889357881659cf05595e541dc645b4e81c3761f16bb",
+      "size": 1348
+    },
+    {
+      "path": "07-其他業務-02-安全升級資助計劃-01.md",
+      "hash": "e18537c9040b4995554d2db85c93f25bc1d36b2236528d52b3c1ba43c7c649df",
+      "size": 6070
+    },
+    {
+      "path": "07-其他業務-03-維生設備客戶支援-01.md",
+      "hash": "f8037921912db91fee0e80c8993ff64953bd2c606846ce2437782e482bda98b8",
+      "size": 1172
+    }
+  ]
+}

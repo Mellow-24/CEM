@@ -1,0 +1,3 @@
+name: 澳门智能客服
+description: 基于本机向量知识库的多语言客服 Agent；支持 Auto 或固定回复语言，仅依据带稳定引文的 hash 批准资料回答。
+order: 5

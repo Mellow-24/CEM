@@ -1,0 +1,8 @@
+{"type":"session","version":0,"id":"{{sessionId}}","createdAt":1788134400000,"cwd":"{{cwd}}","agentPreset":"hk-feng-shui"}
+{"type":"user/message","seq":0,"time":1788134400001,"data":{"content":[{"type":"text","text":"我现在的自动转账\n失败了怎么办？"}],"source":{"kind":"user","rpcId":"{{rpcId}}"}},"surfaceOp":"append"}
+{"type":"assistant/chunk","seq":1,"time":1788134400002,"data":{"turn":1,"step":1,"chunk":{"type":"block-start","index":0,"blockType":"text"}}}
+{"type":"assistant/chunk","seq":2,"time":1788134400003,"data":{"turn":1,"step":1,"chunk":{"type":"text-delta","index":0,"text":"自动转账失败，常见原因是账单已过期或银行账户余额不足。请先确认转账当天账户里有足够资金，也可以联系开户银行查询。需要"}}}
+{"type":"assistant/chunk","seq":3,"time":1788134400004,"data":{"turn":1,"step":1,"chunk":{"type":"text-delta","index":0,"text":"进一步协助的话，请联系在线客服。"}}}
+{"type":"assistant/chunk","seq":4,"time":1788134400005,"data":{"turn":1,"step":1,"chunk":{"type":"block-end","index":0,"block":{"type":"text","text":"自动转账失败，常见原因是账单已过期或银行账户余额不足。请先确认转账当天账户里有足够资金，也可以联系开户银行查询。需要进一步协助的话，请联系在线客服。"}}}}
+{"type":"assistant/chunk","seq":5,"time":1788134400006,"data":{"turn":1,"step":1,"chunk":{"type":"usage","usage":{"inputTokens":18,"outputTokens":15}}}}
+{"type":"assistant/chunk","seq":6,"time":1788134400007,"data":{"turn":1,"step":1,"chunk":{"type":"finish","reason":{"kind":"stop"}}}}

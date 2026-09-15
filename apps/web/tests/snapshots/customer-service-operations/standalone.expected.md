@@ -1,0 +1,74 @@
+- complementary:
+  - img "澳電 CEM"
+  - strong: 智能客服
+  - text: 營運管理中心
+  - navigation "營運管理導航":
+    - heading "營運概覽" [level=2]
+    - button "工作台"
+    - heading "服務配置" [level=2]
+    - button "智能體與渠道"
+    - button "當前知識庫"
+    - button "發音與詞庫"
+    - heading "運營質量" [level=2]
+    - button "會話中心"
+    - button "質檢與評測"
+    - button "報表與大屏"
+  - text: 營
+  - strong: 營運管理員
+  - text: 服務運行正常
+- banner:
+  - text: 澳電智能客服
+  - heading "會話中心" [level=1]
+  - text: 系統服務正常
+  - link "打開客服端":
+    - /url: /customer
+- main:
+  - text: 智能客服營運管理
+  - paragraph: 查看真實歷史會話、執行證據與質量狀態。
+  - time: 2026年9月15日週二
+  - text: 澳電智能客服 · 服務營運
+  - heading "會話質量中心" [level=2]
+  - paragraph: 從真實對話定位問題，用原始執行記錄核驗每一項評分。
+  - button "刷新記錄"
+  - text: 歷史會話
+  - strong: "0"
+  - text: 已質檢會話
+  - strong: "0"
+  - text: 待覆核任務
+  - strong: "0"
+  - text: 未關閉整改
+  - strong: "0"
+  - searchbox "搜索歷史會話"
+  - combobox "預設篩選":
+    - option "全部預設" [selected]
+  - combobox "質檢狀態篩選":
+    - option "全部狀態" [selected]
+    - option "未質檢"
+    - option "評估中"
+    - option "已完成"
+    - option "失敗待重試"
+    - option "已覆核"
+    - option "高風險"
+    - option "整改中"
+  - combobox "質檢分數篩選":
+    - option "全部分數" [selected]
+    - option "低於 60 分"
+    - option "低於 80 分"
+    - option "低於 90 分"
+  - button "清空篩選"
+  - table:
+    - rowgroup:
+      - row "會話 / 時間 意圖與預設 自動評分 狀態 操作":
+        - columnheader "會話 / 時間"
+        - columnheader "意圖與預設"
+        - columnheader "自動評分"
+        - columnheader "狀態"
+        - columnheader "操作"
+    - rowgroup
+  - text: 暫無符合條件的會話。
+  - navigation:
+    - text: 共 0 條 · 第 1 / 1
+    - button "上一頁" [disabled]
+    - button "下一頁" [disabled]
+  - paragraph: 歷史快照只讀；查看與質檢不切換正在使用的客服會話。未採集的渠道、錄音和語音版本不推斷補齊。
+- contentinfo: © Companhia de Electricidade de Macau 智能客服服務平台
