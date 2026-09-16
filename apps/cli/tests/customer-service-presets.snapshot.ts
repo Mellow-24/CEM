@@ -155,6 +155,7 @@ async function runPreset(
   preset: 'macau-customer-service' | 'macau-customer-service-wiki',
   mode: 'rag' | 'wiki',
   preference: 'auto' | 'en' = 'auto',
+  continuation?: string,
 ): Promise<string> {
   setFixtureEnvironment('DSH_CUSTOMER_SERVICE_FIXTURE', mode)
   const sessionId = SessionId(`snapshot-${mode}-session`)
@@ -180,6 +181,13 @@ async function runPreset(
       source: { kind: 'user' },
     }))
     await handle.agent.whenIdle()
+    if (continuation !== undefined) {
+      handle.agent.followup(createUserMessage({
+        content: [{ type: 'text', text: continuation }],
+        source: { kind: 'user' },
+      }))
+      await handle.agent.whenIdle()
+    }
     return normalizedSession(handle.agent.session)
   } finally {
     await handle.dispose()
@@ -231,7 +239,12 @@ describe('shipped customer-service preset transcripts', () => {
   })
 
   it('pins one immutable Wiki release through map, page, and evidence', async () => {
-    const actual = await runPreset('macau-customer-service-wiki', 'wiki')
+    const actual = await runPreset(
+      'macau-customer-service-wiki',
+      'wiki',
+      'auto',
+      '好的，非常感谢。 Thank you very much.',
+    )
     const expected = join(snapshots, 'wiki.expected.jsonl')
     if (refreshing) {
       await mkdir(dirname(expected), { recursive: true })
@@ -240,6 +253,9 @@ describe('shipped customer-service preset transcripts', () => {
     expect(actual).toBe(await readFile(expected, 'utf8'))
     expect(actual).toContain('open_company_wiki_evidence')
     expect(actual).toContain('"preference":"auto"')
+    expect(actual).toContain(
+      '"turn":2,"step":1,"preference":"auto","language":"yue-Hant-MO","basis":"carried"',
+    )
     expect(actual).toContain('Published company Wiki release')
     expect(actual).not.toContain('"isError":true')
   })

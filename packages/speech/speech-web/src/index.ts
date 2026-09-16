@@ -94,6 +94,7 @@ export const Config: z<Config> = z.object({
       backchannelMaximumCharacters: z.number().step(1).min(1).max(32).required(),
     }).required(),
     sentenceMaxChars: z.number().step(1).min(16).max(4000).required(),
+    sentencePauseMinChars: z.number().step(1).min(1).max(4000).required(),
     sentenceQueueLimit: z.number().step(1).min(2).max(128).required(),
     responseTimeoutMs: z.number().step(1).min(1).max(600000).required(),
   })]),
@@ -122,6 +123,9 @@ export function apply(ctx: Context, config: Config = {}): void {
   if (config.call?.fallbackSynthesisProfile !== undefined && config.call.fallbackSynthesisProfile.trim() === '') {
     throw new Error('Call fallbackSynthesisProfile must be non-empty')
   }
+  if (config.call !== undefined && config.call.sentencePauseMinChars > config.call.sentenceMaxChars) {
+    throw new Error('Call sentencePauseMinChars must not exceed sentenceMaxChars')
+  }
   const greetings = new Map(Object.entries(config.call?.greetings ?? {}).map(([language, greeting]) =>
     [language, { text: greeting.text, audio: readFileSync(new URL(import.meta.resolve(greeting.asset))) }]))
   if (config.call !== undefined && !greetings.has(config.call.defaultGreeting)) throw new Error('Default call greeting is unavailable')
@@ -133,6 +137,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     utteranceMergeMs: config.call.utteranceMergeMs,
     interruption: config.call.interruption,
     sentenceMaxChars: config.call.sentenceMaxChars,
+    sentencePauseMinChars: config.call.sentencePauseMinChars,
     sentenceQueueLimit: config.call.sentenceQueueLimit,
     responseTimeoutMs: config.call.responseTimeoutMs,
     ...(config.call.fallbackSynthesisProfile === undefined ? {} : {

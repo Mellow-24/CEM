@@ -20,6 +20,8 @@ describe.skipIf(token === undefined)('MiniStream speech real API', () => {
       normalize: true,
       timeoutMs: 60_000,
       firstAudioTimeoutMs: 10_000,
+      connectionIdleTimeoutMs: 60_000,
+      maxIdleConnectionsPerVoice: 1,
       maxInputChars: 600,
       maxOutputBytes: 2 * 1024 * 1024,
       maxEventBytes: 512 * 1024,

@@ -15,11 +15,12 @@ interface Entry {
 }
 
 /** Find a stable spoken-sentence boundary or a bounded prefix; layout newlines and decimal points are not endings. */
-function boundary(text: string, final: boolean, limit: number): number {
+function boundary(text: string, final: boolean, limit: number, pauseMinimum: number): number {
   for (let i = 0; i < Math.min(text.length, limit); i++) {
     const char = text[i]
     if (char !== undefined && '。！？!?；;'.includes(char)) return i + 1
     if (char === '.' && /\s/.test(text[i + 1] ?? '')) return i + 1
+    if (i + 1 >= pauseMinimum && char !== undefined && '，、,：:'.includes(char)) return i + 1
   }
   if (text.length >= limit) {
     const space = text.lastIndexOf(' ', limit)
@@ -91,7 +92,10 @@ export class VoiceSentenceQueue {
       state.text = block.text
       this.states.set(key, state)
       while (state.sent < state.text.length) {
-        const length = boundary(state.text.slice(state.sent), final, this.options.sentenceMaxChars)
+        const length = boundary(
+          state.text.slice(state.sent), final,
+          this.options.sentenceMaxChars, this.options.sentencePauseMinChars,
+        )
         if (length === 0) break
         const start = state.sent
         state.sent += length

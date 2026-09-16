@@ -301,7 +301,8 @@
             echoSimilarityThreshold: 0.82
             backchannelMaximumCharacters: 6
           responseTimeoutMs: 180000
-          sentenceMaxChars: 160
+          sentenceMaxChars: 72
+          sentencePauseMinChars: 12
           sentenceQueueLimit: 32
 
     - id: api-remotes

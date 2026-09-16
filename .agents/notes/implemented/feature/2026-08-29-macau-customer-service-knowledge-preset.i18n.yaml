@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-29-macau-customer-service-knowledge-preset.md
-2026-08-29-macau-customer-service-knowledge-preset.md: ac6b0c074c9cea827ae1d94816402aa9800c62e6
-2026-08-29-macau-customer-service-knowledge-preset.zh.md: b65ef6e1aff94a74a3d3021f5407882427c75cea
+2026-08-29-macau-customer-service-knowledge-preset.md: 85adc2e00b1c3e3334022802e6cbba8014381549
+2026-08-29-macau-customer-service-knowledge-preset.zh.md: 204846923562bbf51ca010ac46c5b1c6d3969f0b

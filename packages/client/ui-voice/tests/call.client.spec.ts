@@ -7,7 +7,7 @@ import type { SpeechProfile, VoiceClient, VoicePlatform, VoicePlaybackEvents } f
 const profile: SpeechProfile = {
   transcription: { profile: 'asr', mediaTypes: ['audio/webm'], maxBytes: 1000 },
   synthesis: { profile: 'tts', mediaType: 'audio/mpeg', maxInputChars: 4000 },
-  call: { defaultGreeting: 'yue', greetings: { yue: { text: '你好。', url: '/api/speech/greeting?language=yue' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: { confirmationMs: 420, minimumMeaningfulCharacters: 3, echoMinimumCharacters: 6, echoSimilarityThreshold: 0.82, backchannelMaximumCharacters: 6 }, sentenceMaxChars: 160, sentenceQueueLimit: 32, responseTimeoutMs: 1000 },
+  call: { defaultGreeting: 'yue', greetings: { yue: { text: '你好。', url: '/api/speech/greeting?language=yue' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: { confirmationMs: 420, minimumMeaningfulCharacters: 3, echoMinimumCharacters: 6, echoSimilarityThreshold: 0.82, backchannelMaximumCharacters: 6 }, sentenceMaxChars: 160, sentencePauseMinChars: 12, sentenceQueueLimit: 32, responseTimeoutMs: 1000 },
 }
 
 function deferred<T>() {
@@ -518,10 +518,30 @@ describe('continuous voice calls', () => {
     await b.call.stop()
   })
 
+  it('starts synthesis at a comma-like pause only after the configured minimum', async () => {
+    const b = liveBench()
+    await ask(b)
+    b.platform.play.mockClear()
+    b.update({ partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: '你好，請先準備最近一期賬單、' }] } })
+    await vi.waitFor(() => { expect(b.client.synthesizeSentence).toHaveBeenCalledOnce() })
+    expect(b.client.synthesizeSentence).toHaveBeenCalledWith(
+      expect.objectContaining({ prefix: '你好，請先準備最近一期賬單、', start: 0 }), expect.any(AbortSignal),
+    )
+    b.finish('你好，請先準備最近一期賬單、再核對合約資料。')
+    await vi.waitFor(() => { expect(b.client.synthesizeSentence).toHaveBeenCalledTimes(2) })
+    b.playback()!.onEnded()
+    await vi.waitFor(() => { expect(b.platform.play).toHaveBeenCalledTimes(2) })
+    b.playback()!.onEnded()
+    await vi.waitFor(() => { expect(b.call.getSnapshot().phase).toBe('listening') })
+    await b.call.stop()
+  })
+
   it('keeps internal synthesis segments on one natural caption line', async () => {
     const b = liveBench()
     const answer = 'You can pay your charging fees by topping up your CEM App wallet, or by using a Visa, Mastercard or UnionPay credit card for a one-time payment'
-    const configured = { ...b.liveProfile, call: { ...b.liveProfile.call!, sentenceMaxChars: 72 } }
+    const configured = { ...b.liveProfile, call: {
+      ...b.liveProfile.call!, sentenceMaxChars: 90, sentencePauseMinChars: 40,
+    } }
     b.call.start(configured)
     b.playback()!.onEnded()
     await vi.waitFor(() => { expect(b.platform.capture).toHaveBeenCalledOnce() })

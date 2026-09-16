@@ -160,7 +160,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     (message) => { ctx.logger.warn(message) },
     reference => resolveKnowledgeCredential(ctx, reference),
   )
-  await index.validateSources()
+  await index.prepare()
   ctx.systemPrompt.section({
     name: 'knowledge:approved-company-evidence',
     order: 110,

@@ -45,6 +45,10 @@ export interface Config {
   timeoutMs: number
   /** Maximum wait from request start to the first non-empty MP3 frame. */
   firstAudioTimeoutMs: number
+  /** Maximum time an authenticated socket remains idle for reuse. */
+  connectionIdleTimeoutMs: number
+  /** Maximum idle sockets retained for one language and voice. */
+  maxIdleConnectionsPerVoice: number
   /** Maximum accepted text characters. */
   maxInputChars: number
   /** Maximum queued and emitted MP3 bytes. */
@@ -68,6 +72,8 @@ export const Config: z<Config> = z.object({
   normalize: z.boolean().required(),
   timeoutMs: z.number().step(1).min(1).max(2_147_483_647).required(),
   firstAudioTimeoutMs: z.number().step(1).min(1).max(2_147_483_647).required(),
+  connectionIdleTimeoutMs: z.number().step(1).min(1).max(2_147_483_647).required(),
+  maxIdleConnectionsPerVoice: z.number().step(1).min(1).max(32).required(),
   maxInputChars: z.number().step(1).min(1).max(1000).required(),
   maxOutputBytes: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).required(),
   maxEventBytes: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).required(),
@@ -111,6 +117,8 @@ function resolveConfig(config: Config): ResolvedConfig {
     normalize: config.normalize,
     timeoutMs: config.timeoutMs,
     firstAudioTimeoutMs: config.firstAudioTimeoutMs,
+    connectionIdleTimeoutMs: config.connectionIdleTimeoutMs,
+    maxIdleConnectionsPerVoice: config.maxIdleConnectionsPerVoice,
     maxInputChars: config.maxInputChars,
     maxOutputBytes: config.maxOutputBytes,
     maxEventBytes: config.maxEventBytes,
@@ -129,6 +137,7 @@ export class MiniStreamSpeechSynthesisProvider implements SpeechSynthesisProvide
   readonly maxInputChars: number
   readonly maxOutputBytes: number
   private readonly config: ResolvedConfig
+  private readonly connections: MiniStreamConnectionPool
 
   /**
    * @param ctx - credential-resolution context.
@@ -139,6 +148,7 @@ export class MiniStreamSpeechSynthesisProvider implements SpeechSynthesisProvide
     this.profile = this.config.profile
     this.maxInputChars = this.config.maxInputChars
     this.maxOutputBytes = this.config.maxOutputBytes
+    this.connections = new MiniStreamConnectionPool(this.config)
   }
 
   /**
@@ -166,30 +176,160 @@ export class MiniStreamSpeechSynthesisProvider implements SpeechSynthesisProvide
     if (voice === undefined) {
       throw new SpeechSynthesisError(`MiniStream language ${JSON.stringify(language)} is unavailable`, 'PROFILE_UNAVAILABLE')
     }
-    const clientId = crypto.randomUUID()
-    const url = new URL(this.config.endpoint.replace('{client_id}', encodeURIComponent(clientId)))
-    url.searchParams.set('language', primary)
-    url.searchParams.set('generation_mode', this.config.generationMode)
-    url.searchParams.set('voice_preset_key', voice)
-    url.searchParams.set('max_generate_length', String(this.config.maxGenerateLength))
-    url.searchParams.set('normalize', String(this.config.normalize))
-    url.searchParams.set('buffer', 'off')
-    const chunks = streamAudio(url, credential.value, input.text, clientId, this.config, signal)
+    const requestId = crypto.randomUUID()
+    const url = (): URL => {
+      const clientId = crypto.randomUUID()
+      const value = new URL(this.config.endpoint.replace('{client_id}', encodeURIComponent(clientId)))
+      value.searchParams.set('language', primary)
+      value.searchParams.set('generation_mode', this.config.generationMode)
+      value.searchParams.set('voice_preset_key', voice)
+      value.searchParams.set('max_generate_length', String(this.config.maxGenerateLength))
+      value.searchParams.set('normalize', String(this.config.normalize))
+      value.searchParams.set('buffer', 'off')
+      return value
+    }
+    const chunks = streamAudio(
+      this.connections, `${primary}\u0000${voice}`, url, credential.value,
+      input.text, requestId, this.config, signal,
+    )
     return { metadata: { mediaType: this.mediaType, sampleRateHz: 48_000, channels: 1 }, chunks }
+  }
+
+  /** Close idle and active provider sockets during scope teardown. */
+  dispose(): void {
+    this.connections.dispose()
+  }
+}
+
+type ConnectionState = 'busy' | 'idle' | 'closed'
+
+interface MiniStreamConnection {
+  readonly key: string
+  readonly token: string
+  readonly socket: WebSocket
+  state: ConnectionState
+  idleTimer?: ReturnType<typeof setTimeout>
+}
+
+class MiniStreamConnectionPool {
+  private readonly connections = new Set<MiniStreamConnection>()
+
+  constructor(private readonly config: ResolvedConfig) {}
+
+  async acquire(
+    key: string, url: () => URL, token: string, signal: AbortSignal,
+  ): Promise<MiniStreamConnection> {
+    signal.throwIfAborted()
+    for (const connection of this.connections) {
+      if (connection.state !== 'idle' || connection.key !== key) continue
+      if (connection.token !== token || connection.socket.readyState !== WebSocket.OPEN) {
+        this.discard(connection)
+        continue
+      }
+      if (connection.idleTimer !== undefined) clearTimeout(connection.idleTimer)
+      delete connection.idleTimer
+      connection.state = 'busy'
+      return connection
+    }
+    const socket = new WebSocket(url(), {
+      headers: { authorization: `Bearer ${token}` },
+      handshakeTimeout: this.config.timeoutMs,
+      maxPayload: this.config.maxEventBytes,
+      followRedirects: false,
+      rejectUnauthorized: this.config.tlsRejectUnauthorized,
+    })
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = (): void => {
+        socket.removeEventListener('open', opened)
+        socket.removeEventListener('error', failed)
+        signal.removeEventListener('abort', aborted)
+      }
+      const opened = (): void => { cleanup(); resolve() }
+      const failed = (): void => {
+        cleanup()
+        reject(new SpeechSynthesisError('MiniStream connection failed', 'PROVIDER_TRANSPORT_ERROR'))
+      }
+      const aborted = (): void => {
+        cleanup()
+        socket.terminate()
+        reject(signal.reason instanceof Error ? signal.reason : new Error('MiniStream connection aborted'))
+      }
+      socket.addEventListener('open', opened, { once: true })
+      socket.addEventListener('error', failed, { once: true })
+      signal.addEventListener('abort', aborted, { once: true })
+      if (signal.aborted) aborted()
+    })
+    signal.throwIfAborted()
+    const connection: MiniStreamConnection = { key, token, socket, state: 'busy' }
+    this.connections.add(connection)
+    socket.on('error', () => { this.discard(connection) })
+    socket.on('close', () => { this.discard(connection) })
+    return connection
+  }
+
+  release(connection: MiniStreamConnection): void {
+    if (connection.state === 'closed' || connection.socket.readyState !== WebSocket.OPEN) {
+      this.discard(connection)
+      return
+    }
+    const idleCount = [...this.connections].filter(candidate => candidate !== connection
+      && candidate.key === connection.key && candidate.state === 'idle').length
+    if (idleCount >= this.config.maxIdleConnectionsPerVoice) {
+      this.discard(connection)
+      return
+    }
+    connection.state = 'idle'
+    connection.idleTimer = setTimeout(() => {
+      if (connection.state === 'idle') this.discard(connection)
+    }, this.config.connectionIdleTimeoutMs)
+    connection.idleTimer.unref()
+  }
+
+  discard(connection: MiniStreamConnection): void {
+    if (connection.state === 'closed') return
+    connection.state = 'closed'
+    if (connection.idleTimer !== undefined) clearTimeout(connection.idleTimer)
+    this.connections.delete(connection)
+    if (connection.socket.readyState === WebSocket.CONNECTING || connection.socket.readyState === WebSocket.OPEN) {
+      connection.socket.terminate()
+    }
+  }
+
+  dispose(): void {
+    for (const connection of [...this.connections]) this.discard(connection)
   }
 }
 
 async function* streamAudio(
-  url: URL, token: string, text: string, requestId: string, config: ResolvedConfig, signal: AbortSignal,
+  pool: MiniStreamConnectionPool, key: string, url: () => URL, token: string,
+  text: string, requestId: string, config: ResolvedConfig, signal: AbortSignal,
 ): AsyncIterable<Uint8Array> {
   signal.throwIfAborted()
-  const socket = new WebSocket(url, {
-    headers: { authorization: `Bearer ${token}` },
-    handshakeTimeout: config.timeoutMs,
-    maxPayload: config.maxEventBytes,
-    followRedirects: false,
-    rejectUnauthorized: config.tlsRejectUnauthorized,
-  })
+  const deadlineAbort = new AbortController()
+  const deadline = setTimeout(() => { deadlineAbort.abort() }, config.timeoutMs)
+  const operationSignal = AbortSignal.any([signal, deadlineAbort.signal])
+  let connection: MiniStreamConnection | undefined
+  try {
+    connection = await pool.acquire(key, url, token, operationSignal)
+    yield* operationChunks(connection.socket, text, requestId, config, operationSignal)
+    pool.release(connection)
+    connection = undefined
+  } catch (error) {
+    if (connection !== undefined) pool.discard(connection)
+    signal.throwIfAborted()
+    if (deadlineAbort.signal.aborted) {
+      throw new SpeechSynthesisError('MiniStream synthesis timed out', 'PROVIDER_TIMEOUT')
+    }
+    throw error
+  } finally {
+    clearTimeout(deadline)
+    if (connection !== undefined) pool.discard(connection)
+  }
+}
+
+async function* operationChunks(
+  socket: WebSocket, text: string, requestId: string, config: ResolvedConfig, signal: AbortSignal,
+): AsyncIterable<Uint8Array> {
   let started = false
   let done = false
   let error: SpeechSynthesisError | undefined
@@ -206,17 +346,14 @@ async function* streamAudio(
     notify()
   }
   const abort = (): void => { fail('MiniStream synthesis was cancelled', 'PROVIDER_TRANSPORT_ERROR') }
-  const deadline = setTimeout(() => { fail('MiniStream synthesis timed out', 'PROVIDER_TIMEOUT') }, config.timeoutMs)
   const firstAudioDeadline = setTimeout(() => {
     fail('MiniStream did not produce audio in time', 'PROVIDER_TIMEOUT')
   }, config.firstAudioTimeoutMs)
   signal.addEventListener('abort', abort, { once: true })
-  socket.on('open', () => {
-    socket.send(JSON.stringify({ type: 'synthesize', text, request_id: requestId }), (sendError) => {
-      if (sendError) fail('MiniStream synthesis request failed', 'PROVIDER_TRANSPORT_ERROR')
-    })
+  socket.send(JSON.stringify({ type: 'synthesize', text, request_id: requestId }), (sendError) => {
+    if (sendError) fail('MiniStream synthesis request failed', 'PROVIDER_TRANSPORT_ERROR')
   })
-  socket.on('message', (data, binary) => {
+  const message = (data: RawData, binary: boolean): void => {
     if (done) return
     if (binary) {
       if (!started) { fail('MiniStream sent audio before its start event', 'INVALID_PROVIDER_RESPONSE'); return }
@@ -241,15 +378,18 @@ async function* streamAudio(
       if (record['request_id'] !== requestId) throw new Error('wrong request')
       if (record['type'] === 'start' && !started && record['format'] === 'mp3'
         && record['sample_rate'] === 48_000 && record['channels'] === 1) { started = true; return }
-      if (record['type'] === 'end' && started && bytes > 0) { done = true; socket.close(1000); notify(); return }
+      if (record['type'] === 'end' && started && bytes > 0) { done = true; notify(); return }
       if (record['type'] === 'error') { fail('MiniStream synthesis failed', 'PROVIDER_ERROR'); return }
       throw new Error('unexpected event')
     } catch { fail('MiniStream returned an invalid event', 'INVALID_PROVIDER_RESPONSE') }
-  })
-  socket.on('error', () => { fail('MiniStream connection failed', 'PROVIDER_TRANSPORT_ERROR') })
-  socket.on('close', () => {
+  }
+  const socketError = (): void => { fail('MiniStream connection failed', 'PROVIDER_TRANSPORT_ERROR') }
+  const socketClosed = (): void => {
     if (!done) fail('MiniStream connection closed before completion', 'PROVIDER_TRANSPORT_ERROR')
-  })
+  }
+  socket.on('message', message)
+  socket.on('error', socketError)
+  socket.on('close', socketClosed)
   try {
     const active = (): boolean => !done || pending.length > 0
     while (active()) {
@@ -260,10 +400,11 @@ async function* streamAudio(
     signal.throwIfAborted()
     if (error !== undefined) throw error
   } finally {
-    clearTimeout(deadline)
     clearTimeout(firstAudioDeadline)
     signal.removeEventListener('abort', abort)
-    if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) socket.terminate()
+    socket.off('message', message)
+    socket.off('error', socketError)
+    socket.off('close', socketClosed)
   }
 }
 
@@ -276,5 +417,8 @@ function rawData(data: RawData): Buffer {
 /** Register one scoped MiniStream synthesis profile. */
 export function apply(ctx: Context, config: Config): void {
   const provider = new MiniStreamSpeechSynthesisProvider(ctx, config)
-  ctx.effect(() => ctx.speechSynthesis.registerProvider(provider))
+  ctx.effect(() => {
+    const unregister = ctx.speechSynthesis.registerProvider(provider)
+    return () => { unregister(); provider.dispose() }
+  })
 }

@@ -22,6 +22,8 @@ const baseConfig = {
   normalize: true,
   timeoutMs: 1_000,
   firstAudioTimeoutMs: 500,
+  connectionIdleTimeoutMs: 5_000,
+  maxIdleConnectionsPerVoice: 1,
   maxInputChars: 600,
   maxOutputBytes: 100,
   maxEventBytes: 1_000,
@@ -123,6 +125,29 @@ describe('MiniStream speech provider', () => {
       .rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' })
     await expect(provider.synthesize({ text: 'bonjour', language: 'fr' }, new AbortController().signal))
       .rejects.toMatchObject({ code: 'PROFILE_UNAVAILABLE' })
+  })
+
+  it('reuses one authenticated socket for sequential operations and closes it on disposal', async () => {
+    const harness = await server()
+    let connections = 0
+    harness.server.on('connection', (socket) => {
+      connections++
+      socket.on('message', (data) => {
+        const request = JSON.parse(Buffer.from(data as ArrayBuffer).toString()) as { request_id: string }
+        socket.send(JSON.stringify({ type: 'start', request_id: request.request_id,
+          format: 'mp3', sample_rate: 48000, channels: 1 }))
+        socket.send(new Uint8Array([1, 2]), { binary: true })
+        socket.send(JSON.stringify({ type: 'end', request_id: request.request_id }))
+      })
+    })
+    const provider = new MiniStreamSpeechSynthesisProvider(context(), { ...baseConfig, endpoint: harness.endpoint })
+    const first = await provider.synthesize({ text: '第一句。' }, new AbortController().signal)
+    await expect(collect(first.chunks)).resolves.toEqual([1, 2])
+    const second = await provider.synthesize({ text: '第二句。' }, new AbortController().signal)
+    await expect(collect(second.chunks)).resolves.toEqual([1, 2])
+    expect(connections).toBe(1)
+    provider.dispose()
+    await vi.waitFor(() => { expect(harness.server.clients.size).toBe(0) })
   })
 
   it('fails quickly when generation stalls after start and classifies exhausted capacity', async () => {

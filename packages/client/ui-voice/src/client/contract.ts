@@ -74,6 +74,8 @@ export interface SpeechCallOptions {
   }
   /** Maximum characters in one TTS sentence. */
   readonly sentenceMaxChars: number
+  /** Minimum characters before a comma-like pause can start TTS. */
+  readonly sentencePauseMinChars: number
   /** Maximum pending sentences before the call stops. */
   readonly sentenceQueueLimit: number
   /** Alternate synthesis profile selected after the preferred provider fails before audio begins. */

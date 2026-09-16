@@ -30,12 +30,17 @@ const PORTUGUESE_WORDS = new Set([
 ])
 const ENGLISH_WORDS = new Set([
   'account', 'address', 'application', 'apply', 'automatic', 'bill', 'cancel', 'card',
-  'charge', 'contract', 'download', 'due', 'electricity', 'find', 'form', 'hello', 'help',
+  'charge', 'contract', 'download', 'due', 'electricity', 'explain', 'find', 'form', 'help',
   'how', 'installation', 'meter', 'move', 'moving', 'number', 'outage', 'pay', 'payment',
-  'please', 'power', 'price', 'reading', 'reply', 'service', 'solar', 'status', 'supply',
-  'sure', 'thanks', 'transfer', 'usage', 'what', 'when', 'where', 'why', 'would', 'yes',
-  'you', 'your',
+  'power', 'price', 'reading', 'reply', 'service', 'solar', 'status', 'supply', 'transfer',
+  'usage', 'what', 'when', 'where', 'why', 'your',
 ])
+const ENGLISH_CONTINUATION_ANCHORS = new Set([
+  'bye', 'goodbye', 'hello', 'hey', 'hi', 'no', 'ok', 'okay', 'sure', 'thank', 'thanks',
+  'thx', 'ty', 'welcome', 'yes',
+])
+const ENGLISH_REQUEST_BEFORE_LANGUAGE = /\b(?:answer|reply|respond|speak|write)\b[\p{Script=Latin}\s]{0,24}\benglish\b/iu
+const ENGLISH_REQUEST_AFTER_LANGUAGE = /\benglish\b[\p{Script=Latin}\s]{0,16}\b(?:answer|please|reply|response)\b/iu
 
 /**
  * Remove material that commonly names another language without expressing the request language.
@@ -94,9 +99,33 @@ function lexiconScore(words: readonly string[], lexicon: ReadonlySet<string>): n
   return score
 }
 
+/** Whether Latin wording is a social continuation rather than a language-selection signal. */
+function isEnglishContinuationText(input: string): boolean {
+  const words = input.toLocaleLowerCase('und').match(LATIN_WORD) ?? []
+  if (!words.some(word => ENGLISH_CONTINUATION_ANCHORS.has(word))) return false
+  if (lexiconScore(words, ENGLISH_WORDS) > 0 || lexiconScore(words, PORTUGUESE_WORDS) > 0) return false
+  return true
+}
+
+/**
+ * Whether direct input contains an English courtesy, backchannel, or closing
+ * that should inherit the session language instead of selecting English.
+ * Product names and unknown Latin tokens do not turn that social expression
+ * into an English business request.
+ * @param input - Direct user-authored text.
+ * @returns Whether the input should carry the prior response language.
+ */
+export function carriesPriorResponseLanguage(input: string): boolean {
+  const text = languageBearingText(input)
+  return text !== '' && isEnglishContinuationText(text)
+}
+
 /** Detect English or Portuguese from decisive orthographic and lexical features. */
 function detectLatin(input: string): ResponseLanguageDetection | undefined {
   const normalized = input.toLocaleLowerCase('und')
+  if (ENGLISH_REQUEST_BEFORE_LANGUAGE.test(normalized) || ENGLISH_REQUEST_AFTER_LANGUAGE.test(normalized)) {
+    return { language: 'en', confidence: 0.99 }
+  }
   if (PORTUGUESE_DIACRITIC.test(normalized)) {
     return { language: 'pt', confidence: 0.98 }
   }
@@ -129,6 +158,7 @@ export function detectResponseLanguage(input: string): ResponseLanguageDetection
     const chinese = detectChinese(text)
     if (chinese?.language === 'yue-Hant-MO' || han * 2 >= latin) return chinese
   }
+  if (latin >= 2 && isEnglishContinuationText(text)) return undefined
   if (latin >= 2) return detectLatin(text)
   return undefined
 }

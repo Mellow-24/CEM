@@ -7,7 +7,7 @@ const MID = 'message?1' as MessageId
 
 describe('speech profile wire validation', () => {
   it('accepts fractional playback speed and rejects unusable rates', () => {
-    const call = { defaultGreeting: 'yue', greetings: { yue: { text: '你好。', url: '/api/speech/greeting?language=yue' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: { confirmationMs: 420, minimumMeaningfulCharacters: 3, echoMinimumCharacters: 6, echoSimilarityThreshold: 0.82, backchannelMaximumCharacters: 6 }, sentenceMaxChars: 160, sentenceQueueLimit: 32, responseTimeoutMs: 1000 }
+    const call = { defaultGreeting: 'yue', greetings: { yue: { text: '你好。', url: '/api/speech/greeting?language=yue' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: { confirmationMs: 420, minimumMeaningfulCharacters: 3, echoMinimumCharacters: 6, echoSimilarityThreshold: 0.82, backchannelMaximumCharacters: 6 }, sentenceMaxChars: 160, sentencePauseMinChars: 12, sentenceQueueLimit: 32, responseTimeoutMs: 1000 }
     expect(parseSpeechProfile({ call }).call?.playbackRate).toBe(1.15)
     expect(parseSpeechProfile({ call: { ...call, fallbackSynthesisProfile: 'tts-fallback' } }).call)
       .toMatchObject({ fallbackSynthesisProfile: 'tts-fallback' })
@@ -23,6 +23,8 @@ describe('speech profile wire validation', () => {
       ...call.interruption, echoSimilarityThreshold: 0.49,
     } } })).toThrow(/echoSimilarityThreshold/)
     expect(() => parseSpeechProfile({ call: { ...call, interruption: undefined } })).toThrow(/interruption/)
+    expect(() => parseSpeechProfile({ call: { ...call, sentencePauseMinChars: 161 } }))
+      .toThrow(/sentencePauseMinChars/)
     for (const milliseconds of [1900, 2050, 60100, undefined]) {
       expect(() => parseSpeechProfile({ call: { ...call, maxPendingAudioMs: milliseconds } })).toThrow(/maxPendingAudioMs/)
     }

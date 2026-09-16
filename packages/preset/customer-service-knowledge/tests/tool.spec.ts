@@ -252,6 +252,34 @@ describe('customer-service knowledge plugin', () => {
     await ctx.fiber.dispose()
   })
 
+  it('prepares a changed vector cache before accepting customer sessions', async () => {
+    const ctx = new Context()
+    await ctx.plugin(AgentRegistry)
+    await ctx.plugin(SystemPrompt, {})
+    const pluginConfig = await emptyConfig()
+    const text = '# 繳費\n\n可以透過網上銀行繳交電費。'
+    await writeFile(join(pluginConfig.sourceDirectory, 'payment.md'), text)
+    await writeFile(pluginConfig.sourceManifestPath, `${JSON.stringify({
+      version: 1,
+      sources: [{ path: 'payment.md', sha256: createHash('sha256').update(text).digest('hex') }],
+    })}\n`)
+    const fetchMock = vi.fn(async (_input: string | URL, init?: RequestInit): Promise<Response> => {
+      const body = requestJson(init) as { input?: string[] }
+      return Response.json({ data: (body.input ?? []).map(() => ({ embedding: [1, 0] })) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const handle = ctx.plugin(KnowledgePlugin, pluginConfig)
+    await handle
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(requestJson(fetchMock.mock.calls[0]?.[1]) as { input: string[] }).toMatchObject({
+      input: [expect.stringContaining('可以透過網上銀行繳交電費')],
+    })
+    await handle.dispose()
+    await ctx.fiber.dispose()
+  })
+
   it('uses the final non-empty direct-user text and rejects invalid retrieval deadlines', async () => {
     expect(KnowledgePlugin.directCustomerQuery([
       createUserMessage({ content: [{ type: 'text', text: 'first' }], source: { kind: 'user' } }),

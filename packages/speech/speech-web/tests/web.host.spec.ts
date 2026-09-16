@@ -125,7 +125,7 @@ function profileRequest(): Request {
 
 describe('speech Web Consumer', () => {
   it('advertises call limits only with both operations and requires explicit trusted authority', async () => {
-    const call = { defaultGreeting: 'yue', responseInstructions: 'Answer for a live telephone call.', greetings: { yue: { text: '你好。', asset: '@deepseek-ai/dsh-speech-web/greetings/yue.wav' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: INTERRUPTION, sentenceMaxChars: 160, sentenceQueueLimit: 32, responseTimeoutMs: 180000 }
+    const call = { defaultGreeting: 'yue', responseInstructions: 'Answer for a live telephone call.', greetings: { yue: { text: '你好。', asset: '@deepseek-ai/dsh-speech-web/greetings/yue.wav' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: INTERRUPTION, sentenceMaxChars: 160, sentencePauseMinChars: 12, sentenceQueueLimit: 32, responseTimeoutMs: 180000 }
     const enabled = await harness({ transcription: true, synthesis: true, realtime: async () => ({ send: async () => {}, close: async () => {} }), config: { call, authority: 'trusted-host' } })
     const profile = await enabled.routes.get(SPEECH_PROFILE_PATH)!.handler(profileRequest())
     const advertised: unknown = await profile.json()
@@ -137,6 +137,7 @@ describe('speech Web Consumer', () => {
       utteranceMergeMs: call.utteranceMergeMs,
       interruption: call.interruption,
       sentenceMaxChars: call.sentenceMaxChars,
+      sentencePauseMinChars: call.sentencePauseMinChars,
       sentenceQueueLimit: call.sentenceQueueLimit,
       responseTimeoutMs: call.responseTimeoutMs,
       greetings: { yue: { text: '你好。', url: '/api/speech/greeting?language=yue&sessionId=voice-session' } },
@@ -150,6 +151,8 @@ describe('speech Web Consumer', () => {
     expect(() => new Config({ call: { ...call, responseTimeoutMs: 0 } })).toThrow()
     expect(() => new Config({ call: { ...call, utteranceMergeMs: 6001 } })).toThrow()
     expect(() => new Config({ call: { ...call, maxPendingAudioMs: 2050 } })).toThrow()
+    await expect(harness({ config: { call: { ...call, sentencePauseMinChars: 161 } } }))
+      .rejects.toThrow('sentencePauseMinChars')
     expect(() => new Config({ authority: 'public' } as never)).toThrow()
   })
 
@@ -159,6 +162,7 @@ describe('speech Web Consumer', () => {
       greetings: { yue: { text: '你好。', asset: '@deepseek-ai/dsh-speech-web/greetings/yue.wav' } },
       playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
       maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: INTERRUPTION, sentenceMaxChars: 160,
+      sentencePauseMinChars: 12,
       sentenceQueueLimit: 32, responseTimeoutMs: 180000,
       synthesisProfile: 'voice', fallbackSynthesisProfile: 'voice-fallback',
     }
@@ -173,7 +177,7 @@ describe('speech Web Consumer', () => {
     })
   })
   it('serves fixed greetings only to live call-capable sessions without synthesis', async () => {
-    const call = { defaultGreeting: 'yue', responseInstructions: 'Answer for a live telephone call.', greetings: { yue: { text: '你好。', asset: '@deepseek-ai/dsh-speech-web/greetings/yue.wav' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: INTERRUPTION, sentenceMaxChars: 160, sentenceQueueLimit: 32, responseTimeoutMs: 1000 }
+    const call = { defaultGreeting: 'yue', responseInstructions: 'Answer for a live telephone call.', greetings: { yue: { text: '你好。', asset: '@deepseek-ai/dsh-speech-web/greetings/yue.wav' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: INTERRUPTION, sentenceMaxChars: 160, sentencePauseMinChars: 12, sentenceQueueLimit: 32, responseTimeoutMs: 1000 }
     const options = { transcription: true, synthesis: true,
       realtime: async () => ({ send: async () => {}, close: async () => {} }), config: { call } }
     const enabled = await harness(options)
@@ -266,7 +270,7 @@ describe('speech Web Consumer', () => {
 
   it('streams logged sentence prefixes before commit and rejects altered text, reasoning and other sessions', async () => {
     const { agent, routes, spoken } = await harness({ synthesis: true,
-      config: { call: { defaultGreeting: 'yue', responseInstructions: 'Answer for a live telephone call.', greetings: { yue: { text: '你好。', asset: '@deepseek-ai/dsh-speech-web/greetings/yue.wav' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: INTERRUPTION, sentenceMaxChars: 160, sentenceQueueLimit: 32, responseTimeoutMs: 1000 } },
+      config: { call: { defaultGreeting: 'yue', responseInstructions: 'Answer for a live telephone call.', greetings: { yue: { text: '你好。', asset: '@deepseek-ai/dsh-speech-web/greetings/yue.wav' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: INTERRUPTION, sentenceMaxChars: 160, sentencePauseMinChars: 12, sentenceQueueLimit: 32, responseTimeoutMs: 1000 } },
     })
     agent.session.append('assistant/chunk', { turn: 1, step: 1, chunk: { type: 'block-start', index: 0, blockType: 'text' } })
     agent.session.append('assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: '第一句。第二句' } })
@@ -291,7 +295,7 @@ describe('speech Web Consumer', () => {
 
   it('normalizes layout whitespace before synthesizing a call sentence', async () => {
     const { agent, routes, spoken } = await harness({ synthesis: true,
-      config: { call: { defaultGreeting: 'yue', responseInstructions: 'Answer for a live telephone call.', greetings: { yue: { text: '你好。', asset: '@deepseek-ai/dsh-speech-web/greetings/yue.wav' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: INTERRUPTION, sentenceMaxChars: 160, sentenceQueueLimit: 32, responseTimeoutMs: 1000 } },
+      config: { call: { defaultGreeting: 'yue', responseInstructions: 'Answer for a live telephone call.', greetings: { yue: { text: '你好。', asset: '@deepseek-ai/dsh-speech-web/greetings/yue.wav' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: INTERRUPTION, sentenceMaxChars: 160, sentencePauseMinChars: 12, sentenceQueueLimit: 32, responseTimeoutMs: 1000 } },
     })
     const text = 'Pay through the CEM App\nwallet for a one-time payment.'
     agent.session.append('assistant/chunk', { turn: 1, step: 1, chunk: { type: 'block-start', index: 0, blockType: 'text' } })
@@ -332,7 +336,7 @@ describe('streaming speech route lifetime', () => {
     const send = vi.fn(async () => {})
     const close = vi.fn(async () => {})
     const b = await harness({ transcription: true, synthesis: true,
-      config: { call: { defaultGreeting: 'yue', responseInstructions: 'Answer for a live telephone call.', greetings: { yue: { text: '你好。', asset: '@deepseek-ai/dsh-speech-web/greetings/yue.wav' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: INTERRUPTION, sentenceMaxChars: 160, sentenceQueueLimit: 32, responseTimeoutMs: 1000 } },
+      config: { call: { defaultGreeting: 'yue', responseInstructions: 'Answer for a live telephone call.', greetings: { yue: { text: '你好。', asset: '@deepseek-ai/dsh-speech-web/greetings/yue.wav' } }, playbackRate: 1.15, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, maxPendingAudioMs: 8000, utteranceMergeMs: 10, interruption: INTERRUPTION, sentenceMaxChars: 160, sentencePauseMinChars: 12, sentenceQueueLimit: 32, responseTimeoutMs: 1000 } },
       realtime: async () => ({ send, close }),
     })
     const token = 'f5918cc4-b206-47cb-9ba9-e981cc263856'

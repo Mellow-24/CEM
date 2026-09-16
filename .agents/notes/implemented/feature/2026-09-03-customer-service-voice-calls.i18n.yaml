@@ -1,3 +1,6 @@
-# Bilingual-pair consistency record.
-2026-09-03-customer-service-voice-calls.md: 05cc8b3ed125f8ff9afb6398af3c6a4062273678
-2026-09-03-customer-service-voice-calls.zh.md: f59096e33d73e11de43deb94a9a7f0d14f559af0
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-03-customer-service-voice-calls.md
+2026-09-03-customer-service-voice-calls.md: d818f418ccf8ef7950a7093ba83e57544b630283
+2026-09-03-customer-service-voice-calls.zh.md: 27145e3778a7cbe849bbcc7ce1eff9e9dfa887ed

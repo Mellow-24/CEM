@@ -266,6 +266,8 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
         ? callContext.data.content[0].text
         : '').toContain('当前客服只提供澳门粤语和英文')
       expect(ttsVoices[0]).toBe('mailinlin')
+      expect(ttsTexts[0]?.endsWith('，')).toBe(true)
+      expect(ttsTexts[0]?.length).toBeGreaterThanOrEqual(12)
       await expect.poll(() => pcmFrames, { timeout: 15000 }).toBeGreaterThan(40)
       expect(await dialog.getByRole('alert').count()).toBe(0)
       const assistantCaption = dialog.getByText(REPLY, { exact: true })
@@ -291,10 +293,10 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
         await page.screenshot({ path: '/tmp/dsh-realtime-mobile.png' })
       }
       releaseTtsFailure()
-      await expect.poll(() => fallbackRequests.length, { timeout: 20000 }).toBe(1)
-      expect(fallbackAuthorizations).toEqual(['Bearer voice-call-fixture-key'])
-      expect(fallbackRequests).toEqual([{ text: ttsTexts[2], voice: 'Kiki', language_type: 'Chinese' }])
+      await expect.poll(() => fallbackRequests.length, { timeout: 20000 }).toBeGreaterThanOrEqual(1)
+      expect(fallbackRequests[0]).toEqual({ text: ttsTexts[2], voice: 'Kiki', language_type: 'Chinese' })
       await page.getByText('Listening. What can we help with?', { exact: true }).waitFor({ timeout: 20000 })
+      expect(fallbackAuthorizations.every(value => value === 'Bearer voice-call-fixture-key')).toBe(true)
       expect(await assistantCaption.textContent()).toBe(REPLY)
       expect(await dialog.getByRole('alert').count()).toBe(0)
       const fallbackAria = (await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd))

@@ -134,6 +134,11 @@ function parseCall(value: unknown): NonNullable<SpeechProfile['call']> {
   if (greetings[defaultGreeting] === undefined) throw new Error('Default greeting is unavailable')
   const microphone = record(call['microphone'], 'call.microphone')
   const interruption = record(call['interruption'], 'call.interruption')
+  const sentenceMaxChars = positiveInteger(call['sentenceMaxChars'], 'call.sentenceMaxChars')
+  const sentencePauseMinChars = positiveInteger(call['sentencePauseMinChars'], 'call.sentencePauseMinChars')
+  if (sentencePauseMinChars > sentenceMaxChars) {
+    throw new Error('speech call sentencePauseMinChars must not exceed sentenceMaxChars')
+  }
   return {
     greetings, defaultGreeting,
     playbackRate,
@@ -151,7 +156,8 @@ function parseCall(value: unknown): NonNullable<SpeechProfile['call']> {
       echoSimilarityThreshold: boundedRatio(interruption['echoSimilarityThreshold'], 'call.interruption.echoSimilarityThreshold'),
       backchannelMaximumCharacters: positiveInteger(interruption['backchannelMaximumCharacters'], 'call.interruption.backchannelMaximumCharacters'),
     },
-    sentenceMaxChars: positiveInteger(call['sentenceMaxChars'], 'call.sentenceMaxChars'),
+    sentenceMaxChars,
+    sentencePauseMinChars,
     sentenceQueueLimit: positiveInteger(call['sentenceQueueLimit'], 'call.sentenceQueueLimit'),
     responseTimeoutMs: positiveInteger(call['responseTimeoutMs'], 'call.responseTimeoutMs'),
     ...(call['fallbackSynthesisProfile'] === undefined ? {} : {

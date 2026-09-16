@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  carriesPriorResponseLanguage,
   detectResponseLanguage,
   languageBearingText,
 } from '../src/detect.ts'
@@ -14,6 +15,8 @@ describe('response-language detector', () => {
     ['How can I cancel automatic payment?', 'en'],
     ['Meter reading and contract number', 'en'],
     ['Power outage status', 'en'],
+    ['Please reply in English', 'en'],
+    ['English please', 'en'],
     ['Como posso cancelar o pagamento do cartão?', 'pt'],
     ['Yes, you can pay the electricity bill online.', 'en'],
     ['Sim, você pode pagar a fatura de eletricidade online.', 'pt'],
@@ -21,8 +24,31 @@ describe('response-language detector', () => {
     expect(detectResponseLanguage(text)?.language).toBe(language)
   })
 
-  it.each(['', 'OK', '你好', '12345', 'App'])('leaves ambiguous input %j unresolved', (text) => {
+  it.each([
+    '', 'OK', '你好', '12345', 'App', 'Thank you very much.', 'thank u', 'bye bye',
+    '好的，非常感谢。 Thank you very much.',
+  ])('leaves ambiguous or continuity-only input %j unresolved', (text) => {
     expect(detectResponseLanguage(text)).toBeUndefined()
+  })
+
+  it.each([
+    'Thank you very much.',
+    'thank u',
+    'bye bye',
+    'OK, thanks',
+    '好的，非常感谢。 Thank you very much.',
+    'Thanks, CEM App',
+  ])('treats %j as a session-language continuation', (text) => {
+    expect(carriesPriorResponseLanguage(text)).toBe(true)
+  })
+
+  it.each([
+    'How can I check my electricity bill?',
+    'Thank you, can I cancel automatic payment?',
+    'Please reply in English',
+    'Obrigado, thank you',
+  ])('does not treat substantive or explicit input %j as a continuation', (text) => {
+    expect(carriesPriorResponseLanguage(text)).toBe(false)
   })
 
   it('excludes paired quotations before mixed-language detection', () => {

@@ -16,7 +16,7 @@ import type { AssistantMessage, Session, SessionEvent } from '@deepseek-ai/dsh-s
 import type {} from '@deepseek-ai/dsh-commands'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import { detectResponseLanguage } from './detect.ts'
+import { carriesPriorResponseLanguage, detectResponseLanguage } from './detect.ts'
 import type { ResponseLanguageDetection } from './detect.ts'
 import type {
   FixedResponseLanguage,
@@ -238,6 +238,7 @@ interface AssembledResolution {
 interface ClaimedInput {
   messageId: MessageId
   detection?: ResponseLanguageDetection
+  carryPrior?: boolean
 }
 
 /** Resolve the latest durable request language, if one exists. */
@@ -303,6 +304,23 @@ function automaticResolution(
       basis: 'detected',
       messageId: claimed.messageId,
       confidence: detection.confidence,
+    }
+  }
+  if (claimed?.carryPrior === true) {
+    const prior = latestResolution(session.events)
+    if (prior !== undefined) {
+      return {
+        preference: 'auto',
+        language: prior.language,
+        basis: 'carried',
+        messageId: claimed.messageId,
+      }
+    }
+    return {
+      preference: 'auto',
+      language: fallbackLanguage,
+      basis: 'fallback',
+      messageId: claimed.messageId,
     }
   }
   if (claimed !== undefined && autoDetectedLanguages.length < FIXED_RESPONSE_LANGUAGES.length) {
@@ -483,6 +501,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     claimedInputs.set(agent.session, {
       messageId: message.id,
       ...detection === undefined ? {} : { detection },
+      ...carriesPriorResponseLanguage(text) ? { carryPrior: true } : {},
     })
   })
 

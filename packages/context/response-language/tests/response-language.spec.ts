@@ -238,6 +238,40 @@ describe('response-language request integration', () => {
     await bench.ctx.fiber.dispose()
   })
 
+  it('carries the session language across borrowed English courtesies under a restricted policy', async () => {
+    const bench = await harness('yue-Hant-MO', 'standing', ['answer'], false, ['en'])
+
+    await send(bench, '我想查下我依家屋企電費係幾多。')
+    expect(bench.handle.agent.session.events.findLast(event => event.type === 'response-language/resolved'))
+      .toMatchObject({ data: { language: 'yue-Hant-MO', basis: 'fallback' } })
+
+    await send(bench, '好的，非常感谢。 Thank you very much.')
+    expect(bench.adapter.requests.at(-1)?.system)
+      .toContain('Reply in natural Macau Cantonese written with Traditional Chinese characters.')
+    expect(bench.handle.agent.session.events.findLast(event => event.type === 'response-language/resolved'))
+      .toMatchObject({ data: { language: 'yue-Hant-MO', basis: 'carried' } })
+
+    await send(bench, 'How can I check my electricity bill?')
+    expect(bench.handle.agent.session.events.findLast(event => event.type === 'response-language/resolved'))
+      .toMatchObject({ data: { language: 'en', basis: 'detected' } })
+
+    await send(bench, 'thank u, bye bye')
+    expect(bench.adapter.requests.at(-1)?.system).toContain('Reply in English.')
+    expect(bench.handle.agent.session.events.findLast(event => event.type === 'response-language/resolved'))
+      .toMatchObject({ data: { language: 'en', basis: 'carried' } })
+    await bench.handle.dispose()
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('uses the fallback for a borrowed English courtesy without prior session language', async () => {
+    const bench = await harness('yue-Hant-MO', 'standing', ['answer'], false, ['en'])
+    await send(bench, 'Thank you very much.')
+    expect(bench.handle.agent.session.events.findLast(event => event.type === 'response-language/resolved'))
+      .toMatchObject({ data: { language: 'yue-Hant-MO', basis: 'fallback' } })
+    await bench.handle.dispose()
+    await bench.ctx.fiber.dispose()
+  })
+
   it('retries one detectable wrong-language reply before committing the corrected reply', async () => {
     const bench = await harness('zh-Hant', 'standing', ['這是錯誤的中文回覆。', 'This is the corrected English reply.'])
     await bench.ctx.commands.execute(
