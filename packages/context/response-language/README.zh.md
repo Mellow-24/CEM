@@ -11,15 +11,16 @@
   name: '@deepseek-ai/dsh-response-language'
   config:
     fallbackLanguage: zh-Hant
+    autoDetectedLanguages: [en]
 ```
 
-`fallbackLanguage` 可取 `zh-Hans`、`zh-Hant`、`yue-Hant-MO`、`yue-Hant-HK`、`en` 或 `pt`；省略时默认为 `zh-Hant`。Plugin 必须挂载在 agent 预设作用域中。固定偏好词汇依次为 `auto` 和上述六种语言。
+`fallbackLanguage` 可取 `zh-Hans`、`zh-Hant`、`yue-Hant-MO`、`yue-Hant-HK`、`en` 或 `pt`；省略时默认为 `zh-Hant`。`autoDetectedLanguages` 限制 Auto 可采用的确定性检测结果，默认包含全部六种语言。该列表受限时，未检测到或被排除的直接输入使用 `fallbackLanguage`；模型工具继续步骤保留当前轮次的解析结果。Plugin 必须挂载在 agent 预设作用域中。固定偏好词汇依次为 `auto` 和上述六种语言。
 
 ## Durable state and resolution
 
 `response-language/preference` 是完整值、后写覆盖的会话事件。当前组合首次启用该能力时，预设作用域生命周期 listener 会写入 `auto`；重复选择不会追加事件。因此 resume 和 fork 会保留所选值。
 
-`response-language/resolved` 记录一次已接受请求使用的偏好、固定语言、依据、轮次和步骤。检测结果还会记录直接人工消息 id 与置信度。Plugin 在提示词组装前观察 `agent/inbox/claimed`，但只有 `source.kind === 'user'` 的直接文本会参与。固定选择无需检测即可生效；Auto 先使用确定的本地检测，输入含糊时沿用上次结果，最后回退到 `fallbackLanguage`。工具结果、证据、plugin 上下文和 assistant 消息永不参与。
+`response-language/resolved` 记录一次已接受请求使用的偏好、固定语言、依据、轮次和步骤。检测结果还会记录直接人工消息 id 与置信度。Plugin 在提示词组装前观察 `agent/inbox/claimed`，但只有 `source.kind === 'user'` 的直接文本会参与。固定选择无需检测即可生效；Auto 先使用允许范围内的确定性本地检测，内部继续步骤沿用上次结果，最后回退到 `fallbackLanguage`。默认不限制列表时，含糊的直接输入也会沿用上次结果。工具结果、证据、plugin 上下文和 assistant 消息永不参与。
 
 提示词组装会在 `agent/pre-step` 前捕获解析结果。策略会要求缓冲回复投递，并位于工具与完成指引之后。完成文本回复出现确定的本地语言不匹配时，会追加 `response-language/retry`、丢弃未提交输出、强化最终策略 section，并只重试一次。Auto 重试会将被丢弃的答复作为 JSON 文本引用，并要求仅输出解析后输入语言的面向客户译文；固定选择仍使用直接重试指令。工具调用、流式、失败、达到 token 上限、含糊和第二次尝试的输出不会再次因语言而重试。`verifyOutput` 为 false 时，精确的本步骤策略还会放在已记录运行时上下文的最后，提醒模型在每次工具返回后继续遵循；已流式输出的文字无法撤回纠正。解析与重试事件都会决定后续请求行为，因此读取时均为必需事件。
 
@@ -62,7 +63,7 @@ Reply in Portuguese. This response language overrides the language of the user's
 
 ## Known Limitations and Deferred Work
 
-- **受限 Auto 检测器** — 短消息、转写文本或 code-switch 文本可能保持含糊，因此会沿用上次结果或使用配置的后备语言。
+- **受限 Auto 检测器** — 短消息、拼音或拉丁字母转写、code-switch 文本及方言中性文本可能保持含糊。不限制策略会沿用上次结果或使用配置的后备语言；受限 `autoDetectedLanguages` 策略会让不匹配的直接输入使用后备语言。
 - **粤语地区变体需显式选择** — 共用粤语标记在 Auto 中仍解析为 `yue-Hant-MO`；普通粤语文本无法可靠区分澳门与香港。需要指定地区变体时，应选择 `yue-Hant-HK` 或将它配置为后备语言。输出校验器也会接受任一粤语目标使用的标准书面繁体中文，而不会把它视为确定的不匹配。
 - **受限的输出校验器** — 只有同一本地检测器给出的确定结果才会触发纠正，并且每个步骤最多重试一次。含糊或不支持的语言、工具调用、流式、失败和达到 token 上限的输出不会因语言而重试。
 - **没有检索翻译** — 跨语言 query 扩展、多语言别名、重排和 top-k 上下文翻译仍属于检索层工作。

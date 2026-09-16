@@ -12,6 +12,8 @@ describe('response-language detector', () => {
     ['这个电费账单可以网上转账吗？', 'zh-Hans'],
     ['我现在的自动转账失败了怎么办？', 'zh-Hans'],
     ['How can I cancel automatic payment?', 'en'],
+    ['Meter reading and contract number', 'en'],
+    ['Power outage status', 'en'],
     ['Como posso cancelar o pagamento do cartão?', 'pt'],
     ['Yes, you can pay the electricity bill online.', 'en'],
     ['Sim, você pode pagar a fatura de eletricidade online.', 'pt'],

@@ -22,7 +22,7 @@ Status: implemented
 
 `response-language/preference` 记录完整选择值，初始选择为 `auto`。`response-language/resolved` 记录一次已接受请求实际使用的固定语言、轮次、步骤、所选偏好、解析依据与置信度。两个事件都会决定后续提示词行为，因此读取时均为必需事件；根据[会话日志版本机制](../architecture/2026-08-10-session-log-version-mechanism.md)，普通事件词汇扩展仍将 `SESSION_FORMAT_VERSION` 保持为 `0`。
 
-作用域 plugin 会在系统提示词组装前观察直接人工 inbox claim。固定偏好无需检查消息即可生效。Auto 解析只检查直接人工文本；输入含糊时沿用上一次已解析语言，否则使用配置的后备语言。工具结果、检索证据、plugin 上下文和 assistant 文本永不参与，因此英文问题取得粤语证据后，最终回答不会被切回粤语。
+作用域 plugin 会在系统提示词组装前观察直接人工 inbox claim。固定偏好无需检查消息即可生效。Auto 解析只检查直接人工文本，并可使用 `autoDetectedLanguages` 限制允许的检测结果。允许范围内的确定性检测会选择该语言。列表受限时，不匹配的直接输入使用配置的后备语言；内部工具继续步骤保留当前轮次的解析结果。默认不限制列表时，含糊直接输入会先沿用上一次已解析语言，再使用后备语言。工具结果、检索证据、plugin 上下文和 assistant 文本永不参与，因此英文问题取得粤语证据后，最终回答不会被切回粤语。
 
 提示词 section 会捕获本次组装使用的解析结果。完整 `agent/pre-step` waterfall（瀑布式事件）接受该步骤后，plugin 才追加相同的解析事件；被拒绝或取消的步骤不提交事件。即使事件追加在发送前失败，请求 header 仍会记录已渲染系统提示词，从而保持[请求可重建](../architecture/2026-07-05-reconstructable-requests.md)规则。section 位于工具指引之后，并在通常情况下要求缓冲投递。完整文本回复的本地检测确定地不同于解析语言时，会追加 `response-language/retry`、丢弃未提交 chunk，并且只重试一次，不会重新解析输入。Auto 重试会将被丢弃的答复作为 JSON 文本提供，并要求只输出解析后输入语言的面向客户译文；固定选择仍使用直接重试指令。工具调用、流式输出、达到 token 上限、含糊输出和第二次尝试均绕过语言纠正。`verifyOutput` 为 false 时，每个步骤还会把精确的解析策略作为最后一条已记录运行时上下文。该提示要求模型在流式输出客户文字前，改写历史答复、工具结果与证据的字形和语体。
 
@@ -32,11 +32,13 @@ Status: implemented
 
 Host plugin 挂载在两个客服预设内，因此提示词 section 与 `/response-language` 命令遵循[按会话预设作用域](../architecture/2026-08-03-per-session-agent-presets.md)。该命令修改日志中的偏好，不会开启模型轮次。Resume 与 fork 会折叠相同事件；重复选择当前值是 no-op。
 
+两个澳门客服预设将自动检测限制为英语，并以澳门粤语作为后备语言。文字输入与语音通话转写因此共用同一策略：确定的英语输入使用英语；普通话、粤语、葡萄牙语、不支持语言和含糊直接输入都使用澳门粤语。逐句合成读取已记录的 `response-language/resolved` 事件，因此音色会跟随模型必须使用的语言，不会再作独立的音频语言决策。
+
 `sessionProjections` 是进程级表，因此根据[宿主平面所有权](../architecture/2026-08-10-host-plane-ownership-after-presets.md)规则，projection key 是否存在不能表示按会话可用性。`responseLanguage` projection 因此携带显式 `available` 字段。选择 agent 预设后，该值会先变为不可用，直到提供回复语言能力的组合记录偏好。浏览器会隐藏 false 或缺失值，并依据 [Web 会话作用域与 provide channel](../architecture/2026-07-25-web-client-session-scope-and-provide-channel.md)通过现有会话作用域 `conversation.input.right` slot 渲染选择器。
 
 ## Verification
 
-Host 测试覆盖配置校验、选择折叠、Auto 检测、固定语言优先级、含糊输入沿用与后备、只解析直接消息、claim 先于组装的顺序、已接受步骤提交、流式语言提示、命令 no-op、projection 可用性、预设切换、回放、dispose 和 package invariant。客户端测试覆盖 projection 缺失、全部选项、locked 与 pending 状态、命令错误、无障碍名称、slot 注册和清理。产品 snapshot 会启动两个随附客服组合；语音通话 snapshot 会识别简体中文普通话问题、选择普通话音色，并在挂断后保留流式答复。Snapshot normalizer 会用稳定且保持关联的 token 替换易变命令生命周期 id。
+Host 测试覆盖配置校验、选择折叠、不受限和受限的 Auto 检测、固定语言优先级、含糊输入沿用与后备、只解析直接消息、claim 先于组装的顺序、已接受步骤提交、流式语言提示、命令 no-op、projection 可用性、预设切换、回放、dispose 和 package invariant。客户端测试覆盖 projection 缺失、全部选项、locked 与 pending 状态、命令错误、无障碍名称、slot 注册和清理。产品 snapshot 会启动两个随附客服组合；语音通话 snapshot 会提交简体中文普通话问题、显示粤语答复、选择粤语音色，并在挂断后保留流式答复。Snapshot normalizer 会用稳定且保持关联的 token 替换易变命令生命周期 id。
 
 ## Alternatives considered
 
@@ -56,4 +58,4 @@ Host 测试覆盖配置校验、选择折叠、Auto 检测、固定语言优先�
 
 固定选择不增加分类器或 LLM 调用。Auto 使用本地确定性分析和既有模型调用；每个已接受请求会增加一个小型日志事件，确定的输出不匹配会增加一次重试请求和一个重试事件。其重试复用被丢弃的答复作为翻译来源，而非要求模型根据完整会话重新生成回答。选择器与提示词读取 Host 计算状态，因此不存在客户端乐观权威。
 
-检测器有意采用受限语言集合，不能推断所有短消息、转写文本或语言混用消息。共用粤语标记在 Auto 中解析为澳门粤语；普通粤语文本无法可靠识别地区，因此调用方需要显式选择香港变体。输出校验器会接受任一粤语目标使用的标准书面繁体中文，因为本地检测器无法确定地区不匹配。含糊输入会沿用上一次已解析语言或使用部署后备，而不是假装确定。输出纠正只对确定的本地结果生效，且最多重试一次，因此不支持或含糊的输出仍可能通过。多语言别名、混合检索、重排和条件式 query 翻译不属于本次决定。
+检测器有意采用受限语言集合，不能推断所有短消息、转写文本、语言混用消息或方言中性消息。共用粤语标记在不受限的 Auto 中解析为澳门粤语；普通粤语文本无法可靠识别地区，因此调用方需要显式选择香港变体。受限的 Auto 策略会有意地将所有被排除或含糊的直接输入映射到部署后备语言。输出校验器会接受任一粤语目标使用的标准书面繁体中文，因为本地检测器无法确定地区不匹配。输出纠正只对确定的本地结果生效，且最多重试一次，因此不支持或含糊的输出仍可能通过。多语言别名、混合检索、重排和条件式 query 翻译不属于本次决定。

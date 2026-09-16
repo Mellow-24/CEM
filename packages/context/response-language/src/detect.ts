@@ -29,9 +29,12 @@ const PORTUGUESE_WORDS = new Set([
   'quando', 'quero', 'qual', 'serviço', 'sim', 'transferência', 'você', 'voce',
 ])
 const ENGLISH_WORDS = new Set([
-  'account', 'automatic', 'bill', 'cancel', 'card', 'electricity', 'help', 'hello',
-  'how', 'payment', 'please', 'reply', 'service', 'sure', 'thanks', 'transfer',
-  'what', 'when', 'where', 'why', 'would', 'yes', 'you', 'your',
+  'account', 'address', 'application', 'apply', 'automatic', 'bill', 'cancel', 'card',
+  'charge', 'contract', 'download', 'due', 'electricity', 'find', 'form', 'hello', 'help',
+  'how', 'installation', 'meter', 'move', 'moving', 'number', 'outage', 'pay', 'payment',
+  'please', 'power', 'price', 'reading', 'reply', 'service', 'solar', 'status', 'supply',
+  'sure', 'thanks', 'transfer', 'usage', 'what', 'when', 'where', 'why', 'would', 'yes',
+  'you', 'your',
 ])
 
 /**

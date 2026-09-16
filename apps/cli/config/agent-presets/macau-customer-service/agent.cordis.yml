@@ -6,6 +6,7 @@
   name: '@deepseek-ai/dsh-response-language'
   config:
     fallbackLanguage: yue-Hant-MO
+    autoDetectedLanguages: [en]
     verifyOutput: false
 
 - id: persona

@@ -6,7 +6,7 @@
 
 通话连接期间，两个预设会按电话客服方式回答：先说直接结论，只用同一段内适合朗读的纯文本短句，不输出 Markdown 或引用标记，默认两到三个短句。知识回答最多选取与当前问题最相关的两到三个要点。流程较长时先说明客户现在要做的第一步，再询问是否继续。普通文字输入仍保留适合阅读的格式，Wiki 预设在文字对话中仍显示证据引用。
 
-“自动”模式在新通话中用粤语问候，之后跟随明确的提问语言；短句不明确时沿用上一轮，缺少上下文时默认粤语。手动指定的回复语言优先。语言判断沿用现有转写文本逻辑，无法保证从被规范化的文字恢复原始方言。
+“自动”模式在文字与通话中只使用澳门粤语和英语。确定的英语问题使用英文与英语 TTS；普通话、粤语、葡萄牙语、不支持语言和含糊的直接输入，都使用繁体澳门粤语文字与粤语 TTS。内部工具继续步骤保留当前客户轮次已选语言。运营与兼容流程中的手动语言选择仍然优先。
 ## 启动
 
 在服务端环境或根目录 `.env` 中设置 `DASHSCOPE_API_KEY` 和 `MACAU_MINISTREAM_TTS_TOKEN`，重启 Web 应用后打开任一客服预设。密钥不应放入浏览器代码。Web profile 使用同一个 DashScope 凭据调用 Qwen3.7 Plus 对话、Qwen3.7 文本向量、Qwen3 重排、语音识别和备用语音合成。
@@ -30,7 +30,7 @@ pnpm dsh --profile web
 | `DSH_MACAU_TTS_REALTIME_URL` | 可选 MiniStream WebSocket 地址；默认为公司试用端点。 |
 | `DSH_MACAU_TTS_FALLBACK_URL` | 可选 Qwen3-TTS SSE 地址；默认为百炼北京端点。 |
 
-客户回答通过预设内请求路由使用非推理模式 `qwen3.7-flash`，AI 质检仍使用 `qwen3.7-plus`。Web 部署保留首个问题生成的本地确定性历史标题，并关闭并发的标题模型调用。RAG 仍先使用 `qwen3.7-text-embedding`，再通过 `qwen3-rerank` 重排；候选数、阈值和结果排序不变，Embedding 模型或端点变化会使可丢弃的向量缓存失效并重建。通话识别使用 `qwen3-asr-flash-realtime`，TTS 首选公司 MiniStream WebSocket 渐进输出 48 kHz MP3。`generationMode` 为 `preset_voice`；粤语使用算法微调音色 `mailinlin`，普通话、英语和葡语分别使用 `zh_daily_female`、`en_jennifer` 和 `pt_sofia`。MiniStream 必须在五秒内输出首个音频帧；播放前发生超时、容量拒绝或其他错误时，同一句会改用流式 Qwen3-TTS 重试，粤语、普通话、英语和葡语分别使用 Kiki、Cherry、Jennifer 和 Maia，且本次通话后续播报继续使用该降级提供方。预加载的粤语欢迎语使用 `mailinlin`。
+客户回答通过预设内请求路由使用非推理模式 `qwen3.7-flash`，AI 质检仍使用 `qwen3.7-plus`。Web 部署保留首个问题生成的本地确定性历史标题，并关闭并发的标题模型调用。RAG 仍先使用 `qwen3.7-text-embedding`，再通过 `qwen3-rerank` 重排；候选数、阈值和结果排序不变，Embedding 模型或端点变化会使可丢弃的向量缓存失效并重建。通话识别使用 `qwen3-asr-flash-realtime`，TTS 首选公司 MiniStream WebSocket 渐进输出 48 kHz MP3。`generationMode` 为 `preset_voice`；自动客服回复使用粤语微调音色 `mailinlin` 或英语音色 `en_jennifer`。MiniStream 必须在五秒内输出首个音频帧；播放前发生超时、容量拒绝或其他错误时，同一句会改用流式 Qwen3-TTS 重试，粤语使用 Kiki，英语使用 Jennifer，且本次通话后续播报继续使用该降级提供方。预加载的粤语欢迎语使用 `mailinlin`。普通话和葡语音色仅供显式兼容选择使用。
 
 ## 部署与限制
 

@@ -97,11 +97,15 @@ export interface Config {
   verifyOutput?: boolean
   /** Language used when Auto has no decisive direct-user text or prior resolution. */
   fallbackLanguage?: FixedResponseLanguage
+  /** Detected languages that Auto may select; other direct input uses the fallback. */
+  autoDetectedLanguages?: FixedResponseLanguage[]
 }
 
 /** Runtime configuration schema. */
 export const Config: z<Config> = z.object({
   fallbackLanguage: z.union([...FIXED_RESPONSE_LANGUAGES]).default('zh-Hant'),
+  autoDetectedLanguages: z.array(z.union([...FIXED_RESPONSE_LANGUAGES]))
+    .default([...FIXED_RESPONSE_LANGUAGES]),
   verifyOutput: z.boolean().default(true),
 })
 
@@ -288,9 +292,10 @@ function directUserText(message: UserMessage): string | undefined {
 function automaticResolution(
   session: Session,
   fallbackLanguage: FixedResponseLanguage,
+  autoDetectedLanguages: readonly FixedResponseLanguage[],
   claimed: ClaimedInput | undefined,
 ): AssembledResolution {
-  if (claimed?.detection !== undefined) {
+  if (claimed?.detection !== undefined && autoDetectedLanguages.includes(claimed.detection.language)) {
     const detection = claimed.detection
     return {
       preference: 'auto',
@@ -298,6 +303,14 @@ function automaticResolution(
       basis: 'detected',
       messageId: claimed.messageId,
       confidence: detection.confidence,
+    }
+  }
+  if (claimed !== undefined && autoDetectedLanguages.length < FIXED_RESPONSE_LANGUAGES.length) {
+    return {
+      preference: 'auto',
+      language: fallbackLanguage,
+      basis: 'fallback',
+      messageId: claimed.messageId,
     }
   }
   const prior = latestResolution(session.events)
@@ -322,10 +335,13 @@ function automaticResolution(
 function resolveAssembly(
   session: Session,
   fallbackLanguage: FixedResponseLanguage,
+  autoDetectedLanguages: readonly FixedResponseLanguage[],
   claimed: ClaimedInput | undefined,
 ): AssembledResolution {
   const preference = foldResponseLanguage(session.events).currentValue
-  if (preference === 'auto') return automaticResolution(session, fallbackLanguage, claimed)
+  if (preference === 'auto') {
+    return automaticResolution(session, fallbackLanguage, autoDetectedLanguages, claimed)
+  }
   return { preference, language: preference, basis: 'fixed' }
 }
 
@@ -375,14 +391,24 @@ export function resolveConfig(config: Config): Required<Config> {
   if (!(FIXED_RESPONSE_LANGUAGES as readonly unknown[]).includes(fallbackLanguage)) {
     throw new Error(`response-language fallbackLanguage is unknown: ${JSON.stringify(fallbackLanguage)}`)
   }
-  const unknown = Object.keys(config).filter(key => key !== 'fallbackLanguage' && key !== 'verifyOutput')
+  const autoDetectedLanguages = config.autoDetectedLanguages ?? [...FIXED_RESPONSE_LANGUAGES]
+  if (!Array.isArray(autoDetectedLanguages)
+    || autoDetectedLanguages.some(language => !(FIXED_RESPONSE_LANGUAGES as readonly unknown[]).includes(language))) {
+    throw new Error('response-language autoDetectedLanguages contains an unknown language')
+  }
+  if (new Set(autoDetectedLanguages).size !== autoDetectedLanguages.length) {
+    throw new Error('response-language autoDetectedLanguages must not contain duplicates')
+  }
+  const unknown = Object.keys(config).filter(
+    key => key !== 'fallbackLanguage' && key !== 'autoDetectedLanguages' && key !== 'verifyOutput',
+  )
   if (unknown.length > 0) {
     throw new Error(`response-language config has unknown key(s): ${unknown.join(', ')}`)
   }
   if (config.verifyOutput !== undefined && typeof config.verifyOutput !== 'boolean') {
     throw new Error('response-language verifyOutput must be a boolean')
   }
-  return { fallbackLanguage, verifyOutput: config.verifyOutput ?? true }
+  return { fallbackLanguage, autoDetectedLanguages: [...autoDetectedLanguages], verifyOutput: config.verifyOutput ?? true }
 }
 
 /**
@@ -396,7 +422,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   if (policyScope === undefined) {
     throw new Error('response-language must be mounted inside an agent preset scope')
   }
-  const { fallbackLanguage, verifyOutput } = resolveConfig(config)
+  const { fallbackLanguage, autoDetectedLanguages, verifyOutput } = resolveConfig(config)
   const claimedInputs = new WeakMap<Session, ClaimedInput>()
   const assembledResolutions = new WeakMap<Session, AssembledResolution>()
   const correctionRetries = new WeakMap<Session, { turn: number; step: number; candidate?: string }>()
@@ -469,6 +495,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       const resolution = resolveAssembly(
         agent.session,
         fallbackLanguage,
+        autoDetectedLanguages,
         claimedInputs.get(agent.session),
       )
       if (context.signal !== undefined) assembledResolutions.set(agent.session, resolution)

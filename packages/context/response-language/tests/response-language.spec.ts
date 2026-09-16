@@ -55,6 +55,7 @@ async function harness(
   placement: 'standing' | 'agent' = 'standing',
   responses: readonly string[] = ['answer'],
   verifyOutput = true,
+  autoDetectedLanguages?: ResponseLanguage.FixedResponseLanguage[],
 ): Promise<Bench> {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx, { systemPrompt: { persona: 'Customer service.' } })
@@ -67,7 +68,11 @@ async function harness(
   const policyKey = { responseLanguagePreset: crypto.randomUUID() }
   if (placement === 'standing') {
     const policyScope = createScope(ctx, policyKey)
-    languageFiber = await policyScope.ctx.plugin(ResponseLanguage, { fallbackLanguage, verifyOutput })
+    languageFiber = await policyScope.ctx.plugin(ResponseLanguage, {
+      fallbackLanguage,
+      verifyOutput,
+      ...autoDetectedLanguages === undefined ? {} : { autoDetectedLanguages },
+    })
   }
   const handle = await ctx.agents.create({
     sessionId: SessionId(`response-language-${crypto.randomUUID()}`),
@@ -78,7 +83,11 @@ async function harness(
         if (agentScope === undefined) throw new Error('test Agent has no scope')
         bindScopeParent(agentScope, policyKey)
       } else {
-        languageFiber = await agentCtx.plugin(ResponseLanguage, { fallbackLanguage, verifyOutput })
+        languageFiber = await agentCtx.plugin(ResponseLanguage, {
+          fallbackLanguage,
+          verifyOutput,
+          ...autoDetectedLanguages === undefined ? {} : { autoDetectedLanguages },
+        })
       }
     },
   })
@@ -203,6 +212,28 @@ describe('response-language request integration', () => {
     expect(bench.handle.agent.session.events.findLast(event => event.type === 'response-language/resolved'))
       .toMatchObject({ data: { preference: 'auto', language: 'zh-Hans', basis: 'detected' } })
     expect(bench.handle.agent.session.events.some(event => event.type === 'response-language/retry')).toBe(false)
+    await bench.handle.dispose()
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('limits automatic replies to English and the configured fallback', async () => {
+    const bench = await harness('yue-Hant-MO', 'standing', ['answer', 'answer', 'answer'], false, ['en'])
+    await send(bench, '我现在想查询电费。')
+    expect(bench.adapter.requests.at(-1)?.system)
+      .toContain('Reply in natural Macau Cantonese written with Traditional Chinese characters.')
+    expect(bench.handle.agent.session.events.findLast(event => event.type === 'response-language/resolved'))
+      .toMatchObject({ data: { language: 'yue-Hant-MO', basis: 'fallback' } })
+
+    await send(bench, 'How can I check my electricity bill?')
+    expect(bench.adapter.requests.at(-1)?.system).toContain('Reply in English.')
+    expect(bench.handle.agent.session.events.findLast(event => event.type === 'response-language/resolved'))
+      .toMatchObject({ data: { language: 'en', basis: 'detected' } })
+
+    await send(bench, 'Como posso consultar a fatura?')
+    expect(bench.adapter.requests.at(-1)?.system)
+      .toContain('Reply in natural Macau Cantonese written with Traditional Chinese characters.')
+    expect(bench.handle.agent.session.events.findLast(event => event.type === 'response-language/resolved'))
+      .toMatchObject({ data: { language: 'yue-Hant-MO', basis: 'fallback' } })
     await bench.handle.dispose()
     await bench.ctx.fiber.dispose()
   })
@@ -532,13 +563,27 @@ describe('response-language configuration and command errors', () => {
     const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
     await expect(ctx.plugin(ResponseLanguage, {})).rejects.toThrow(/agent preset scope/)
-    expect(ResponseLanguage.resolveConfig({})).toEqual({ fallbackLanguage: 'zh-Hant', verifyOutput: true })
+    expect(ResponseLanguage.resolveConfig({})).toEqual({
+      fallbackLanguage: 'zh-Hant',
+      autoDetectedLanguages: [...ResponseLanguage.FIXED_RESPONSE_LANGUAGES],
+      verifyOutput: true,
+    })
     expect(() => ResponseLanguage.resolveConfig({ verifyOutput: 'false' } as never)).toThrow(/boolean/)
     expect(ResponseLanguage.isResponseLanguagePreference(42)).toBe(false)
     expect(ResponseLanguage.isResponseLanguagePreference('en')).toBe(true)
     expect(ResponseLanguage.isResponseLanguagePreference('yue-Hant-HK')).toBe(true)
     expect(ResponseLanguage.resolveConfig({ fallbackLanguage: 'yue-Hant-HK' }))
-      .toEqual({ fallbackLanguage: 'yue-Hant-HK', verifyOutput: true })
+      .toEqual({
+        fallbackLanguage: 'yue-Hant-HK',
+        autoDetectedLanguages: [...ResponseLanguage.FIXED_RESPONSE_LANGUAGES],
+        verifyOutput: true,
+      })
+    expect(ResponseLanguage.resolveConfig({ autoDetectedLanguages: ['en'] }))
+      .toMatchObject({ autoDetectedLanguages: ['en'] })
+    expect(() => ResponseLanguage.resolveConfig({ autoDetectedLanguages: ['de' as never] }))
+      .toThrow(/autoDetectedLanguages contains an unknown language/)
+    expect(() => ResponseLanguage.resolveConfig({ autoDetectedLanguages: ['en', 'en'] }))
+      .toThrow(/must not contain duplicates/)
     expect(() => ResponseLanguage.resolveConfig({ fallbackLanguage: 'de' as never }))
       .toThrow(/fallbackLanguage is unknown/)
     expect(() => ResponseLanguage.resolveConfig({ extra: true } as never))

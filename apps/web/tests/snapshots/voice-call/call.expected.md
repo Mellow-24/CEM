@@ -6,7 +6,7 @@
     - text: You
     - paragraph: 我现在的自动转账 失败了怎么办？
     - text: Assistant
-    - paragraph: 自动转账失败，常见原因是账单已过期或银行账户余额不足。请先确认转账当天账户里有足够资金，也可以联系开户银行查询。需要进一步协助的话，请联系在线客服。
+    - paragraph: 自動轉賬失敗，常見原因係賬單已經過期，或者銀行戶口餘額不足。請先確認轉賬當日戶口有足夠資金，亦可以聯絡開戶銀行查詢。如果仲需要協助，請聯絡網上客服。
   - contentinfo:
     - paragraph: Speak after the greeting. You can interrupt any answer.
     - button "End call"

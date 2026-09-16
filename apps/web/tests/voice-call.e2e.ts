@@ -12,7 +12,7 @@ import { launchWebScaffold, captureStableAria, compareOrRefreshGolden, webSnapsh
 import { connectFreshWorkspace, newEnglishPage } from './support.ts'
 
 const MODE = webSnapshotMode()
-const REPLY = '自动转账失败，常见原因是账单已过期或银行账户余额不足。请先确认转账当天账户里有足够资金，也可以联系开户银行查询。需要进一步协助的话，请联系在线客服。'
+const REPLY = '自動轉賬失敗，常見原因係賬單已經過期，或者銀行戶口餘額不足。請先確認轉賬當日戶口有足夠資金，亦可以聯絡開戶銀行查詢。如果仲需要協助，請聯絡網上客服。'
 const GREETING = '你好，我係澳電智能客服，請問有咩可以幫到你？'
 const FIRST_PROMPT_SEGMENT = '我现在的自动转账'
 const SECOND_PROMPT_SEGMENT = '失败了怎么办？'
@@ -264,8 +264,8 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
           && event.data.source.sections.some(section => section.name === 'speech-web:active-call'))
       expect(callContext?.type === 'user/message' && callContext.data.content[0]?.type === 'text'
         ? callContext.data.content[0].text
-        : '').toContain('zh-Hans 必须使用简体字和普通话表达，不得使用粤语词')
-      expect(ttsVoices[0]).toBe('zh_daily_female')
+        : '').toContain('当前客服只提供澳门粤语和英文')
+      expect(ttsVoices[0]).toBe('mailinlin')
       await expect.poll(() => pcmFrames, { timeout: 15000 }).toBeGreaterThan(40)
       expect(await dialog.getByRole('alert').count()).toBe(0)
       const assistantCaption = dialog.getByText(REPLY, { exact: true })
@@ -293,7 +293,7 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
       releaseTtsFailure()
       await expect.poll(() => fallbackRequests.length, { timeout: 20000 }).toBe(1)
       expect(fallbackAuthorizations).toEqual(['Bearer voice-call-fixture-key'])
-      expect(fallbackRequests).toEqual([{ text: ttsTexts[2], voice: 'Cherry', language_type: 'Chinese' }])
+      expect(fallbackRequests).toEqual([{ text: ttsTexts[2], voice: 'Kiki', language_type: 'Chinese' }])
       await page.getByText('Listening. What can we help with?', { exact: true }).waitFor({ timeout: 20000 })
       expect(await assistantCaption.textContent()).toBe(REPLY)
       expect(await dialog.getByRole('alert').count()).toBe(0)
