@@ -72,13 +72,13 @@ class CustomerServiceMockAdapter extends LlmAdapter {
     const results = toolResults(options)
     if (mode === 'rag') {
       const evidence = automaticKnowledge(options)
-      if (evidence.length !== 1 || !evidence[0]?.includes('自動轉賬')) {
+      if (evidence.length !== 1 || !evidence[0]?.includes('客服口語示例（澳門粵語）')) {
         throw new Error('customer-service mock: automatic company knowledge is missing')
       }
       if (options.system?.includes('Reply in English.')) {
-        yield * answer('Customers can cancel automatic transfer through a designated bank\'s mobile app, or by bringing the electricity bill, identity document, and bank passbook.')
+        yield * answer('You can view the current bill through CEM Online Services, the CEM App, or CEM WeChat Services.')
       } else {
-        yield * answer('可以透過指定銀行手機應用程式，或攜帶電費單、身份證明文件及銀行存摺辦理取消自動轉賬。')
+        yield * answer('張電費單唔見咗唔緊要，你可以登入澳電網上服務、澳電App或者澳電微信服務，查返當月張單。')
       }
       return
     }

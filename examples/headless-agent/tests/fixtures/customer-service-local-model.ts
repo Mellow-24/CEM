@@ -27,6 +27,15 @@ export function apply(ctx: Context): void {
           results: body.documents.map((_value, index) => ({ index, relevance_score: 1 - index / 100 })),
         })
       }
+      if (url.endsWith('/chat/completions')) {
+        const answer = '張電費單唔見咗唔緊要，你可以登入澳電網上服務、澳電App或者澳電微信服務，查返當月張單。'
+        return new Response([
+          `data: ${JSON.stringify({ choices: [{ delta: { content: answer } }] })}`,
+          `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 7, completion_tokens: 5 } })}`,
+          'data: [DONE]',
+          '',
+        ].join('\n\n'), { headers: { 'content-type': 'text/event-stream' } })
+      }
       return await previous(input, init)
     }
     return () => { globalThis.fetch = previous }

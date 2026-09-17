@@ -75,23 +75,15 @@ function normalizedSession(session: Session): string {
 async function prepareRag(): Promise<void> {
   const directory = join(root, 'rag')
   const source = [
-    '# 澳電多語言 FAQ',
+    '# 澳電客服 FAQ',
     '',
-    '## 取消自動轉賬',
+    '## 遺失電費單',
     '',
-    '客戶可以透過指定銀行手機應用程式，或攜帶電費單、身份證明文件及銀行存摺辦理取消自動轉賬。',
+    '相似問法：張電費單唔見咗；电费单弄丢了；找不到电费单。',
     '',
-    '## Contract number — English',
+    '回答：客戶可以登入澳電網上服務、澳電App或者澳電微信服務，查閱當月賬單。',
     '',
-    'Question: Where can I find the contract number?',
-    '',
-    'Answer: The contract number is located in the upper-right corner on the front of the electricity bill.',
-    '',
-    '## Número de contrato — Português',
-    '',
-    'Pergunta: Onde posso encontrar o número de contrato?',
-    '',
-    'Resposta: O número de contrato encontra-se no canto superior direito da frente da factura de electricidade.',
+    '客服口語示例（澳門粵語）：張電費單唔見咗唔緊要，你可以登入澳電網上服務、澳電App或者澳電微信服務，查返當月張單。',
     '',
   ].join('\n')
   await mkdir(directory, { recursive: true })
@@ -156,6 +148,7 @@ async function runPreset(
   mode: 'rag' | 'wiki',
   preference: 'auto' | 'en' = 'auto',
   continuation?: string,
+  prompt = '點樣取消自動轉賬？',
 ): Promise<string> {
   setFixtureEnvironment('DSH_CUSTOMER_SERVICE_FIXTURE', mode)
   const sessionId = SessionId(`snapshot-${mode}-session`)
@@ -177,7 +170,7 @@ async function runPreset(
       }
     }
     handle.agent.followup(createUserMessage({
-      content: [{ type: 'text', text: '點樣取消自動轉賬？' }],
+      content: [{ type: 'text', text: prompt }],
       source: { kind: 'user' },
     }))
     await handle.agent.whenIdle()
@@ -219,8 +212,8 @@ afterAll(async () => {
 })
 
 describe('shipped customer-service preset transcripts', () => {
-  it('keeps the Cantonese RAG query while a fixed preference produces an English answer', async () => {
-    const actual = await runPreset('macau-customer-service', 'rag', 'en')
+  it('retrieves a colloquial lost-bill alias and returns a spoken Macau Cantonese answer', async () => {
+    const actual = await runPreset('macau-customer-service', 'rag', 'auto', undefined, '我弄丢电费单了，怎么办？')
     const expected = join(snapshots, 'rag.expected.jsonl')
     if (refreshing) {
       await mkdir(dirname(expected), { recursive: true })
@@ -229,11 +222,9 @@ describe('shipped customer-service preset transcripts', () => {
     expect(actual).toBe(await readFile(expected, 'utf8'))
     expect(actual).toContain('customer-service-knowledge/retrieval')
     expect(actual).not.toContain('search_company_knowledge')
-    expect(actual).toContain('"query":"點樣取消自動轉賬？"')
-    expect(actual).toContain('Customers can cancel automatic transfer')
-    expect(actual).toContain('取消自動轉賬')
-    expect(actual).toContain('Where can I find the contract number?')
-    expect(actual).toContain('Onde posso encontrar o número de contrato?')
+    expect(actual).toContain('"query":"我弄丢电费单了，怎么办？"')
+    expect(actual).toContain('張電費單唔見咗唔緊要')
+    expect(actual).toContain('客服口語示例（澳門粵語）')
     expect(actual).not.toMatch(/\[[a-f0-9]{64}\]/u)
     expect(actual).not.toContain('"isError":true')
   })

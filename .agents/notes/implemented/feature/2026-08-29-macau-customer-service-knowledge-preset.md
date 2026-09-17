@@ -28,6 +28,8 @@ One FIFO queue serializes validation, cache publication, and search across every
 
 Each internal result carries a content-derived evidence id, but the model-visible renderer emits only excerpt text and escapes source-controlled markup into a JSON data block. The standing prompt and result text state that source strings are quoted data rather than instructions and prohibit exposing documents, identifiers, scores, or retrieval process details to the customer. The plugin records the exact query, bounded evidence, result status, rerank use, source count, and duration in `customer-service-knowledge/retrieval`; the quality projection presents that event as an automatic knowledge-retrieval trace.
 
+Approved entries may keep reviewed Mandarin, Traditional Chinese, and colloquial Cantonese query aliases beside the canonical question. They may also separate the authoritative `回答` facts from an optional `客服口語示例（澳門粵語）`. The persona treats that example only as wording guidance, preserves every condition in the authoritative answer, and rewrites evidence into natural Macau Cantonese instead of reading source prose verbatim. Calls add short-sentence and one-point-per-sentence constraints through their existing runtime context. This composition still performs one embedding request, one rerank request, and one streamed answer request per customer turn; it adds no query-rewrite model, second answer model, or post-generation verifier.
+
 ## Alternatives considered
 
 **Treat every supported file in one directory as approved.** Rejected because an unreviewed file or same-size edit would silently become model evidence. The manifest makes approval a reviewable exact-byte decision and rejects inventory drift.
@@ -42,6 +44,8 @@ Each internal result carries a content-derived evidence id, but the model-visibl
 
 **Disable or bypass reranking for lower latency.** Rejected because both exact FAQ wording and ambiguous free-form questions must exercise the deployed vector-retrieval path. Every non-empty question retains query embedding, vector thresholds, and configured reranking.
 
+**Run a second model pass to localize or verify every answer.** Rejected because it would serialize another generation before the customer sees text or hears speech. Reviewed aliases, optional spoken examples, and the existing answer prompt keep localization inside the single streamed answer request.
+
 ## Consequences
 
 The source root and manifest must exist before the preset can mount. Mounting may contact the embedding endpoint and delays service readiness when an approved corpus or index-identity change requires rebuilding the cache. Every direct customer message incurs query embedding and reranking before its single answer request, while source-vector rebuilding stays outside customer turns. Searches reuse the prepared cache after revalidating source bytes and derived chunks. Operators must calibrate both relevance thresholds with approved positive and out-of-domain questions for their selected models.
@@ -50,8 +54,10 @@ Embedding endpoints, and reranker endpoints when enabled, receive approved fragm
 
 Spreadsheet FAQ additions use exact-answer deduplication: approved Chinese answers stay in their existing canonical entries, while new English and Portuguese answers use language-specific sections with stable FAQ ids and source-row provenance. This avoids duplicate Chinese fragments consuming a bounded retrieval result set while preserving direct multilingual query text for embedding.
 
+Changing an approved alias, fact, or spoken example changes the source hash and invalidates the disposable vector cache. The rebuild occurs during startup before customer turns. Longer source chunks and prompt instructions consume a small amount of model input, but they introduce no additional provider round trip on the first-token or TTS path.
+
 The current source formats remain text-oriented. PDF, DOCX, image, audio, and table-aware extraction require an approved parser and provenance policy before joining the manifest format.
 
 ## Verification
 
-The focused package suite pins manifest rejection paths, strict cache reuse and poisoning rejection, vector-dimension changes, full retrieval for exact FAQ-heading questions, both relevance thresholds, cancellation and transient reranker retry, shared-instance serialization, UTF-8 query/result limits, automatic context injection and disposal, durable retrieval relations, and quality-trace projection. The shipped preset composition supplies every required operational value and an exact manifest for its checked-in source. Its keyless assembled-Web transcript reaches the customer answer in one model step, includes English and Portuguese FAQ evidence, and verifies that evidence ids stay out of the customer answer.
+The focused package suite pins manifest rejection paths, strict cache reuse and poisoning rejection, vector-dimension changes, full retrieval for exact FAQ-heading questions, both relevance thresholds, cancellation and transient reranker retry, shared-instance serialization, UTF-8 query/result limits, automatic context injection and disposal, durable retrieval relations, and quality-trace projection. The shipped preset composition supplies every required operational value and an exact manifest for its checked-in source. Its keyless assembled-Web transcript retrieves a colloquial lost-bill query, includes the reviewed Macau Cantonese example, reaches the customer answer in one model step, and verifies that evidence ids stay out of the answer.

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write apps/cli/config/agent-presets/macau-customer-service/README.md
-README.md: 4dc0be01317433bbbe22ddde617cf5a46e06449f
-README.zh.md: 0ec0e97a37faca46a8e83f1eda0bf3855ea0e329
+README.md: a2198c42ba72c0ebff4abc158229553d45d06356
+README.zh.md: c83902c78516345e5ea01888f3871521778803fc

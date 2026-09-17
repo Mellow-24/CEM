@@ -6,6 +6,8 @@ Both `macau-customer-service` and `macau-customer-service-wiki` support the Web 
 
 While a call is connected, both presets answer as a telephone agent: direct conclusion first, plain spoken sentences in one paragraph without Markdown or citation markers, and two or three short sentences by default. Knowledge answers select at most the two or three facts most relevant to the question. A long procedure starts with the caller's immediate next action and offers to continue. The normal text composer retains its reading-oriented format; the Wiki preset still includes evidence citations there.
 
+The RAG corpus separates approved facts from optional `客服口語示例（澳門粵語）` phrasing. Retrieval indexes reviewed Mandarin, Traditional Chinese, and colloquial Cantonese aliases together. The agent preserves the approved facts and uses the examples only to render natural Macau customer-service Cantonese; evidence text is never treated as a script to read verbatim. This adds no model request or post-generation verification stage.
+
 Auto uses only Macau Cantonese and English for both text and calls. A decisively English question receives English text and English TTS; Mandarin, Cantonese, Portuguese, unsupported, and ambiguous direct input receives Traditional-Chinese Macau Cantonese text and Cantonese TTS. Internal tool continuations preserve the language selected for that customer turn. An explicit language selection still takes priority for operator and compatibility workflows.
 ## Start
 
