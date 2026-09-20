@@ -238,33 +238,41 @@ class MiniStreamConnectionPool {
       followRedirects: false,
       rejectUnauthorized: this.config.tlsRejectUnauthorized,
     })
-    await new Promise<void>((resolve, reject) => {
-      const cleanup = (): void => {
-        socket.removeEventListener('open', opened)
-        socket.removeEventListener('error', failed)
-        signal.removeEventListener('abort', aborted)
-      }
-      const opened = (): void => { cleanup(); resolve() }
-      const failed = (): void => {
-        cleanup()
-        reject(new SpeechSynthesisError('MiniStream connection failed', 'PROVIDER_TRANSPORT_ERROR'))
-      }
-      const aborted = (): void => {
-        cleanup()
-        socket.terminate()
-        reject(signal.reason instanceof Error ? signal.reason : new Error('MiniStream connection aborted'))
-      }
-      socket.addEventListener('open', opened, { once: true })
-      socket.addEventListener('error', failed, { once: true })
-      signal.addEventListener('abort', aborted, { once: true })
-      if (signal.aborted) aborted()
-    })
-    signal.throwIfAborted()
     const connection: MiniStreamConnection = { key, token, socket, state: 'busy' }
     this.connections.add(connection)
+    // Own the socket before cancellation can terminate its opening handshake. `ws`
+    // emits an asynchronous error after terminating CONNECTING, so this listener
+    // must outlive the one-shot acquire promise and contain that terminal event.
     socket.on('error', () => { this.discard(connection) })
     socket.on('close', () => { this.discard(connection) })
-    return connection
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = (): void => {
+          socket.removeEventListener('open', opened)
+          socket.removeEventListener('error', failed)
+          signal.removeEventListener('abort', aborted)
+        }
+        const opened = (): void => { cleanup(); resolve() }
+        const failed = (): void => {
+          cleanup()
+          reject(new SpeechSynthesisError('MiniStream connection failed', 'PROVIDER_TRANSPORT_ERROR'))
+        }
+        const aborted = (): void => {
+          cleanup()
+          this.discard(connection)
+          reject(signal.reason instanceof Error ? signal.reason : new Error('MiniStream connection aborted'))
+        }
+        socket.addEventListener('open', opened, { once: true })
+        socket.addEventListener('error', failed, { once: true })
+        signal.addEventListener('abort', aborted, { once: true })
+        if (signal.aborted) aborted()
+      })
+      signal.throwIfAborted()
+      return connection
+    } catch (error) {
+      this.discard(connection)
+      throw error
+    }
   }
 
   release(connection: MiniStreamConnection): void {

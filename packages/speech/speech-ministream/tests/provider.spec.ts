@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import SpeechSynthesisRuntime from '@deepseek-ai/dsh-speech-synthesis'
+import { createServer, type Server as NetServer } from 'node:net'
 import { WebSocketServer } from 'ws'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -10,6 +11,7 @@ import {
 } from '../src/index.ts'
 
 const servers: WebSocketServer[] = []
+const netServers: NetServer[] = []
 const baseConfig = {
   profile: 'customer-service',
   endpoint: 'ws://127.0.0.1:1/tts/{client_id}',
@@ -53,6 +55,9 @@ async function collect(source: AsyncIterable<Uint8Array>): Promise<number[]> {
 afterEach(async () => {
   for (const instance of servers.splice(0)) {
     for (const client of instance.clients) client.terminate()
+    await new Promise<void>((resolve) => { instance.close(() => { resolve() }) })
+  }
+  for (const instance of netServers.splice(0)) {
     await new Promise<void>((resolve) => { instance.close(() => { resolve() }) })
   }
 })
@@ -125,6 +130,31 @@ describe('MiniStream speech provider', () => {
       .rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' })
     await expect(provider.synthesize({ text: 'bonjour', language: 'fr' }, new AbortController().signal))
       .rejects.toMatchObject({ code: 'PROFILE_UNAVAILABLE' })
+  })
+
+  it('contains the terminal socket error when cancellation interrupts the opening handshake', async () => {
+    let accepted!: () => void
+    const connected = new Promise<void>((resolve) => { accepted = resolve })
+    const instance = createServer((socket) => {
+      socket.once('data', () => { accepted() })
+    })
+    netServers.push(instance)
+    await new Promise<void>((resolve) => { instance.listen(0, '127.0.0.1', resolve) })
+    const address = instance.address()
+    if (typeof address === 'string' || address === null) throw new Error('TCP server did not expose a port')
+    const provider = new MiniStreamSpeechSynthesisProvider(context(), {
+      ...baseConfig,
+      endpoint: `ws://127.0.0.1:${String(address.port)}/tts/{client_id}`,
+    })
+    const abort = new AbortController()
+    const output = await provider.synthesize({ text: '测试' }, abort.signal)
+    const reading = collect(output.chunks)
+
+    await connected
+    abort.abort()
+
+    await expect(reading).rejects.toMatchObject({ name: 'AbortError' })
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
   })
 
   it('reuses one authenticated socket for sequential operations and closes it on disposal', async () => {

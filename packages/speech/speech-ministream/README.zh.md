@@ -4,7 +4,7 @@
 
 感知凭据的 MiniStream WebSocket [`ctx.speechSynthesis`](../speech-synthesis/README.md) Service Provider。它注册一个 scope 局部 profile，并把每个已接纳句子转换成一次 `preset_voice` 操作。二进制 MP3 帧到达后立即向下游传递，因此浏览器可以在合成完成前开始播放。
 
-提供方把解析后的凭据放在服务端 `Authorization` 请求头中，端点 URL 不携带 token。每次操作使用新的不透明 request id，要求二进制音频之前存在 `start`，至少收到一个音频帧后才能 `end`，并拒绝无关或格式错误的事件。完成操作的连接可以为相同语言、音色和凭据的后续串行操作复用。二进制帧不携带 request id，因此忙碌连接保持独占，并发合成会新建连接。连接池按每种语言与音色最多保留 `maxIdleConnectionsPerVoice` 条空闲连接，并在 `connectionIdleTimeoutMs` 后关闭；取消、失败、凭据变化及插件卸载都会阻止不安全的复用。调用方 signal 和 `timeoutMs` 会终止操作；收到 `start` 后仍未输出音频的生成会在 `firstAudioTimeoutMs` 到期时失败。提供方返回 429 容量状态时会报告 `PROVIDER_BUSY`。`maxEventBytes` 限制单个 WebSocket 帧，`maxOutputBytes` 限制已接收和排队的音频总量。
+提供方把解析后的凭据放在服务端 `Authorization` 请求头中，端点 URL 不携带 token。每次操作使用新的不透明 request id，要求二进制音频之前存在 `start`，至少收到一个音频帧后才能 `end`，并拒绝无关或格式错误的事件。完成操作的连接可以为相同语言、音色和凭据的后续串行操作复用。二进制帧不携带 request id，因此忙碌连接保持独占，并发合成会新建连接。连接池按每种语言与音色最多保留 `maxIdleConnectionsPerVoice` 条空闲连接，并在 `connectionIdleTimeoutMs` 后关闭；取消、失败、凭据变化及插件卸载都会阻止不安全的复用。连接池会在取消操作可能终止连接握手前取得 socket 所有权，并处理其终止 `error` 事件，因此取消只会拒绝当前合成操作。调用方 signal 和 `timeoutMs` 会终止操作；收到 `start` 后仍未输出音频的生成会在 `firstAudioTimeoutMs` 到期时失败。提供方返回 429 容量状态时会报告 `PROVIDER_BUSY`。`maxEventBytes` 限制单个 WebSocket 帧，`maxOutputBytes` 限制已接收和排队的音频总量。
 
 ## Config
 

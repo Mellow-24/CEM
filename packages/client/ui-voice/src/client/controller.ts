@@ -121,7 +121,7 @@ export class VoiceSessionController implements VoiceSessionObservable {
     return pending
   }
 
-  /** Drop cached authority and reload after the Web connection re-establishes. */
+  /** Drop cached authority and reload after the owning Session is live. */
   refreshProfile(): void {
     if (this.disposed) return
     this.abortProfileRequest()

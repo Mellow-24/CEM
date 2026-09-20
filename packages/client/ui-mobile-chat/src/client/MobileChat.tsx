@@ -176,7 +176,8 @@ export function MobileConversation(props: ConversationProps) {
     else void finish()
   }
   const submit = (event: FormEvent): void => { event.preventDefault(); void send(ui.draft) }
-  const visibleError = error || voice.recordingError || voice.profileError || session.lastAgentError || session.promptError?.error.message
+  const sessionError = error || session.lastAgentError || session.promptError?.error.message
+  const voiceError = voice.recordingError || voice.profileError
 
   return <div className={css.conversation} data-cem-conversation>
     {empty && <div className={css.brandSweep} aria-hidden="true"><i /><i /></div>}
@@ -210,8 +211,9 @@ export function MobileConversation(props: ConversationProps) {
     </div>
     {!atBottom && !empty && <button className={css.latest} onClick={() => { setAtBottom(true) }}>回到最新消息 ↓</button>}
     <div className={css.composerArea}>
-      {visibleError && <div className={css.error} role="alert">{visibleError}<button onClick={() => { void attempt(props.refreshVoice) }}>重試語音服務</button></div>}
-      {voice.profileState === 'unavailable' && <div className={css.error}>語音服務尚未就緒，您仍可使用文字聊天。<button onClick={() => { void attempt(props.refreshVoice) }}>重新連接語音</button></div>}
+      {sessionError && <div className={css.error} role="alert">{sessionError}<button onClick={() => { void attempt(props.refreshVoice) }}>重新連接客服</button></div>}
+      {!sessionError && voiceError && <div className={css.error} role="alert">{voiceError}<button onClick={() => { void attempt(props.refreshVoice) }}>重試語音服務</button></div>}
+      {!sessionError && !voiceError && voice.profileState === 'unavailable' && <div className={css.error}>語音服務尚未就緒，您仍可使用文字聊天。<button onClick={() => { void attempt(props.refreshVoice) }}>重新連接語音</button></div>}
       {session.pending.map(wait => <PendingRequest key={wait.key} wait={wait} respond={result => props.respond(wait.key, result)} />)}
       {session.running && !calling && <button className={css.stopAnswer} onClick={() => { void attempt(props.cancel) }}><Icon name="stop" />停止回答</button>}
       {voiceBusy && <div className={css.recording} data-cancel={cancelGesture || undefined} role="status"><strong>{cancelGesture ? '鬆開取消' : voice.recordingState === 'transcribing' ? '正在轉為文字…' : voice.recordingState === 'requesting' ? '正在開啟麥克風…' : '正在聆聽…'}</strong><Wave active={recording} /><span>{cancelGesture ? '取消後不會發送' : '鬆開轉文字，上滑取消'}</span><button onClick={props.cancelRecording}>取消</button></div>}

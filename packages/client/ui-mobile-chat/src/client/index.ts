@@ -28,8 +28,9 @@ export function apply(ctx: ClientContext, config: Config): void {
   if (!config.servicePresets.includes(config.defaultPreset)) throw new Error('mobile-chat: defaultPreset must appear in servicePresets')
   const { api } = ctx.get('connection') as ConnectionHandle
   const voices = new Map<SessionId, BrowserVoiceRuntime>()
-  const rememberedKey = 'cem.mobile.lastSession'
+  const rememberedKey = 'cem.mobile.lastSession.v2'
   let navigation: Promise<void> | undefined
+  let recoveryGeneration = 0
   let alive = true
   const isAlive = (): boolean => alive
   const isCustomer = (id: SessionId): boolean => {
@@ -72,9 +73,10 @@ export function apply(ctx: ClientContext, config: Config): void {
       if (!fresh) {
         let remembered: string | null = null
         try { remembered = localStorage.getItem(rememberedKey) } catch { /* Optional UI persistence may be unavailable. */ }
-        const list = ctx.sessions.list.getSnapshot()
-        const restored = list.ids.find(id => id === remembered && isCustomer(id))
-          ?? (list.current !== undefined && isCustomer(list.current) ? list.current : undefined)
+        const rememberedId = remembered as SessionId | null
+        const restored = rememberedId !== null && isCustomer(rememberedId)
+          ? rememberedId
+          : undefined
         if (restored !== undefined) { await select(restored); return }
       }
       await stopMedia()
@@ -113,13 +115,39 @@ export function apply(ctx: ClientContext, config: Config): void {
     previous = current
   }), 'mobile-chat: media follows selection')
   ctx.on('connection/reset', () => {
-    for (const voice of voices.values()) { voice.controller.deactivate(); void voice.call.stop(); voice.controller.refreshProfile() }
+    const generation = ++recoveryGeneration
+    const active = [...voices.entries()]
+    for (const [, voice] of active) {
+      voice.controller.deactivate()
+    }
+    void (async () => {
+      await Promise.all(active.map(async ([, voice]) => {
+        try {
+          await voice.call.stop()
+        } catch {
+          // Connection loss may prevent the call's final Session cancellation; exact-id resume repairs authority below.
+        }
+      }))
+      for (const [id, voice] of active) {
+        if (!alive || generation !== recoveryGeneration || voices.get(id) !== voice) return
+        try {
+          await select(id)
+        } catch {
+          // A failed resume is reported by the profile request through the existing mobile error row.
+        }
+        // select awaits RPC while disposal or a newer reset may replace this runtime.
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
+        if (!alive || generation !== recoveryGeneration || voices.get(id) !== voice) return
+        voice.controller.refreshProfile()
+      }
+    })()
   })
   ctx.effect(() => {
     const leave = (): void => { void stopMedia() }
     window.addEventListener('pagehide', leave)
     return async () => {
       alive = false
+      recoveryGeneration++
       window.removeEventListener('pagehide', leave)
       await Promise.all([...voices.values()].map(voice => voice.dispose()))
       voices.clear()

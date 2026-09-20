@@ -10,7 +10,7 @@ CEM-branded mobile chat over the existing Host, Sessions, agent presets, and [br
 
 `defaultPreset` selects the initial customer agent and must occur in `servicePresets`. The latter limits the service picker and history to configured customer agents. `language` selects the call greeting and speech language. The defaults are `macau-customer-service`, both Macau customer-service presets, and `yue`. A missing workspace, unavailable preset, or failed resume is displayed with retry; no synthetic answer substitutes for a Host failure.
 
-Opening a Session uses the Host's explicit-id creation to resume its persisted identity, workspace, and preset before requesting speech capabilities. Changing service starts a blank conversation rather than rewriting the preset of existing history. Browser storage remembers only the selected Session id; messages remain in the Host log. Typed drafts and unsent recordings are not durable across page reloads.
+Opening a Session uses the Host's explicit-id creation to resume its persisted identity, workspace, and preset before requesting speech capabilities. A browser restores only the Session id it previously selected; without that local marker it starts a blank conversation instead of adopting the Host-wide current Session. After a connection reset, the mobile shell invalidates cached speech authority, resumes that exact Session, and only then reloads speech capabilities. Changing service starts a blank conversation rather than rewriting the preset of existing history. Browser storage remembers only the selected Session id; messages remain in the Host log. Typed drafts and unsent recordings are not durable across page reloads.
 
 ## Interaction and media
 
@@ -38,5 +38,5 @@ Ordinary append-only conversation behavior; presentation does not change provide
 
 - **Device acceptance** — automated Chromium capture and replay cannot certify a particular Android browser, speaker, microphone, echo path, or certificate trust. Microphone use requires HTTPS and permission; browser-managed background suspension remains possible.
 - **AI calls only** — the call button starts a browser AI conversation, not PSTN dialing or human-agent transfer.
-- **Shared deployment** — UI isolation does not create separate customer authorization, quotas, or data tenancy. LAN password exemption is a development choice, not a production authentication design.
+- **Shared deployment** — local Session restoration prevents accidental adoption of another browser's current conversation, but UI isolation does not create separate customer authorization, history visibility, quotas, or data tenancy. LAN password exemption is a development choice, not a production authentication design.
 - **Permission details** — granting administrative tool permissions stays in the original application. Mobile customer conversations should use an appropriately restricted agent preset.
