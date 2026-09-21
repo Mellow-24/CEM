@@ -12,7 +12,7 @@ After a restart, the mobile shell refreshed its speech profile before explicitly
 
 ## Decision
 
-The MiniStream pool owns each socket before awaiting its opening handshake and installs persistent `error` and `close` containment at that point. Cancellation discards the owned connection; a terminal error can close that operation but cannot become an unhandled process event.
+Each MiniStream synthesis operation owns its socket before awaiting the opening handshake and retains a terminal `error` handler until closure. Cancellation before `open` terminates the incomplete transport; cancellation after `open` completes the provider-required normal close handshake described in [the close-lifecycle decision](2026-09-21-ministream-close-handshake.md). The terminal error can reject that synthesis operation but cannot become an unhandled process event.
 
 The CEM mobile shell restores only the Session id stored by that browser. A missing local marker starts a blank customer conversation instead of falling back to the Host-wide current Session. On connection reset, the shell deactivates media and invalidates cached speech authority, resumes the exact active Session id, and refreshes the speech profile only after that resume settles. Session and transport failures use a customer-connection retry label; recording and speech-profile failures retain the speech-service retry label.
 

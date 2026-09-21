@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-20-mobile-voice-cancellation-recovery.md
-2026-09-20-mobile-voice-cancellation-recovery.md: ad35ec0a4c8b57fb09c40fd36713c0c234abef2f
-2026-09-20-mobile-voice-cancellation-recovery.zh.md: 521e2c6eab3ebb7f45b3831818de25d73a5c2f91
+2026-09-20-mobile-voice-cancellation-recovery.md: 543da2947e9859a7b95a8cda6985164d09a700ad
+2026-09-20-mobile-voice-cancellation-recovery.zh.md: fc1b1efa6ee46cd156a9794937ae6d28456b6845

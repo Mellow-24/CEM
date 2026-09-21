@@ -4,7 +4,7 @@
 
 感知凭据的 MiniStream WebSocket [`ctx.speechSynthesis`](../speech-synthesis/README.md) Service Provider。它注册一个 scope 局部 profile，并把每个已接纳句子转换成一次 `preset_voice` 操作。二进制 MP3 帧到达后立即向下游传递，因此浏览器可以在合成完成前开始播放。
 
-提供方把解析后的凭据放在服务端 `Authorization` 请求头中，端点 URL 不携带 token。每次操作使用新的不透明 request id，要求二进制音频之前存在 `start`，至少收到一个音频帧后才能 `end`，并拒绝无关或格式错误的事件。完成操作的连接可以为相同语言、音色和凭据的后续串行操作复用。二进制帧不携带 request id，因此忙碌连接保持独占，并发合成会新建连接。连接池按每种语言与音色最多保留 `maxIdleConnectionsPerVoice` 条空闲连接，并在 `connectionIdleTimeoutMs` 后关闭；取消、失败、凭据变化及插件卸载都会阻止不安全的复用。连接池会在取消操作可能终止连接握手前取得 socket 所有权，并处理其终止 `error` 事件，因此取消只会拒绝当前合成操作。调用方 signal 和 `timeoutMs` 会终止操作；收到 `start` 后仍未输出音频的生成会在 `firstAudioTimeoutMs` 到期时失败。提供方返回 429 容量状态时会报告 `PROVIDER_BUSY`。`maxEventBytes` 限制单个 WebSocket 帧，`maxOutputBytes` 限制已接收和排队的音频总量。
+提供方把解析后的凭据放在服务端 `Authorization` 请求头中，端点 URL 不携带 token。每次操作使用新的不透明 request id 和 WebSocket，要求二进制音频之前存在 `start`，至少收到一个音频帧后才能 `end`，并拒绝无关或格式错误的事件。已打开连接上的操作完成、取消或提供方失败后，提供方发送关闭码 1000，并在强制终止传输前最多等待 `closeHandshakeTimeoutMs` 以接收对端 close 帧。建立握手期间取消时，由于还无法发送 WebSocket close 帧，未完成的传输会被直接终止。终止错误处理器保留到连接关闭，因此取消只会拒绝当前合成操作。调用方 signal 和 `timeoutMs` 会终止操作；收到 `start` 后仍未输出音频的生成会在 `firstAudioTimeoutMs` 到期时失败。提供方返回 429 容量状态时会报告 `PROVIDER_BUSY`。`maxEventBytes` 限制单个 WebSocket 帧，`maxOutputBytes` 限制已接收和排队的音频总量。
 
 ## Config
 
@@ -19,8 +19,7 @@
 | `maxGenerateLength`、`normalize` | 是 | 提供方生成与文本规范化参数。 |
 | `timeoutMs` | 是 | 连接和完整流式响应的时限。 |
 | `firstAudioTimeoutMs` | 是 | 等待首个非空 MP3 音频帧的时限。 |
-| `connectionIdleTimeoutMs` | 是 | 可复用鉴权连接关闭前的最长空闲时间。 |
-| `maxIdleConnectionsPerVoice` | 是 | 每种语言与音色最多保留的空闲连接数。 |
+| `closeHandshakeTimeoutMs` | 是 | 强制终止前，等待对端确认关闭码 1000 的时限。 |
 | `maxInputChars`、`maxOutputBytes`、`maxEventBytes` | 是 | 输入、完整音频和单帧大小限制。 |
 | `tlsRejectUnauthorized` | 否 | TLS 证书校验；默认为 `true`。 |
 
@@ -36,6 +35,6 @@
 
 ## Known Limitations and Deferred Work
 
-- **不支持多路复用** — 二进制 MP3 帧不标识所属请求，因此一个连接同时只处理一项合成操作。并发句子准备使用独立连接，只有已完成的串行操作会复用鉴权连接。
+- **每项操作独立连接** — MiniStream 容量在 WebSocket 关闭握手完成前一直被占用，因此鉴权 socket 不进入连接池或复用。并发句子准备使用独立连接。
 - **仅预置音色** — 本提供方不支持随机音色或上传参考音频的生成模式。
 - **不自动重试** — 传输、提供方、超时或格式错误会结束操作，因为重试可能重复产生计费音频。

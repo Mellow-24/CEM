@@ -100,8 +100,7 @@
     maxEventBytes: 2097152
     timeoutMs: 120000
     firstAudioTimeoutMs: 5000
-    connectionIdleTimeoutMs: 60000
-    maxIdleConnectionsPerVoice: 1
+    closeHandshakeTimeoutMs: 3000
 
 - id: speech-dashscope-fallback
   name: '@deepseek-ai/dsh-speech-dashscope'

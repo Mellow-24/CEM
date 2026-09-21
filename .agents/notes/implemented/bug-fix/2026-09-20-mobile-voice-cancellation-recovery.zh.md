@@ -12,7 +12,7 @@ Status: implemented
 
 ## Decision
 
-MiniStream 连接池在等待握手完成前取得每个 socket 的所有权，并立即安装持久的 `error` 和 `close` 处理。取消操作会丢弃已归属的连接；终止错误可以结束当前操作，但不会成为未处理的进程事件。
+每项 MiniStream 合成操作在等待建立握手前取得 socket 所有权，并保留终止 `error` 处理器直到连接关闭。在 `open` 前取消会终止未完成的传输；在 `open` 后取消会完成[关闭生命周期决策](2026-09-21-ministream-close-handshake.md)规定的提供方正常关闭握手。终止错误可以拒绝当前合成操作，但不会成为未处理的进程事件。
 
 澳电手机界面只恢复该浏览器存储的 Session id。本地标记缺失时，会创建空白客服对话，不回退到 Host 全局当前 Session。连接重置时，界面会停用媒体并使已缓存的语音权限失效，恢复正在使用的精确 Session id，并且只在恢复结算后刷新语音 profile。Session 和传输失败使用客服连接重试标签；录音和语音 profile 失败保留语音服务重试标签。
 

@@ -24,8 +24,7 @@ const baseConfig = {
   normalize: true,
   timeoutMs: 1_000,
   firstAudioTimeoutMs: 500,
-  connectionIdleTimeoutMs: 5_000,
-  maxIdleConnectionsPerVoice: 1,
+  closeHandshakeTimeoutMs: 100,
   maxInputChars: 600,
   maxOutputBytes: 100,
   maxEventBytes: 1_000,
@@ -117,7 +116,11 @@ describe('MiniStream speech provider', () => {
 
   it('propagates cancellation and rejects missing credentials', async () => {
     const harness = await server()
-    harness.server.on('connection', (socket) => { socket.on('message', () => {}) })
+    let closeCode: number | undefined
+    harness.server.on('connection', (socket) => {
+      socket.on('message', () => {})
+      socket.on('close', (code) => { closeCode = code })
+    })
     const provider = new MiniStreamSpeechSynthesisProvider(context(), { ...baseConfig, endpoint: harness.endpoint })
     const abort = new AbortController()
     const output = await provider.synthesize({ text: '测试' }, abort.signal)
@@ -125,6 +128,7 @@ describe('MiniStream speech provider', () => {
     await vi.waitFor(() => { expect(harness.server.clients.size).toBe(1) })
     abort.abort()
     await expect(reading).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.waitFor(() => { expect(closeCode).toBe(1000) })
     const missing = new MiniStreamSpeechSynthesisProvider(new Context(), baseConfig)
     await expect(missing.synthesize({ text: '测试' }, new AbortController().signal))
       .rejects.toMatchObject({ code: 'MISSING_CREDENTIAL' })
@@ -157,11 +161,13 @@ describe('MiniStream speech provider', () => {
     await new Promise<void>((resolve) => { setImmediate(resolve) })
   })
 
-  it('reuses one authenticated socket for sequential operations and closes it on disposal', async () => {
+  it('uses a fresh authenticated socket per operation and completes each normal close handshake', async () => {
     const harness = await server()
     let connections = 0
+    const closeCodes: number[] = []
     harness.server.on('connection', (socket) => {
       connections++
+      socket.on('close', (code) => { closeCodes.push(code) })
       socket.on('message', (data) => {
         const request = JSON.parse(Buffer.from(data as ArrayBuffer).toString()) as { request_id: string }
         socket.send(JSON.stringify({ type: 'start', request_id: request.request_id,
@@ -175,9 +181,31 @@ describe('MiniStream speech provider', () => {
     await expect(collect(first.chunks)).resolves.toEqual([1, 2])
     const second = await provider.synthesize({ text: '第二句。' }, new AbortController().signal)
     await expect(collect(second.chunks)).resolves.toEqual([1, 2])
-    expect(connections).toBe(1)
-    provider.dispose()
-    await vi.waitFor(() => { expect(harness.server.clients.size).toBe(0) })
+    expect(connections).toBe(2)
+    await vi.waitFor(() => {
+      expect(closeCodes).toEqual([1000, 1000])
+      expect(harness.server.clients.size).toBe(0)
+    })
+  })
+
+  it('forces transport shutdown when the peer does not acknowledge close', async () => {
+    const harness = await server()
+    harness.server.on('connection', (socket) => {
+      socket.on('message', (data) => {
+        const request = JSON.parse(Buffer.from(data as ArrayBuffer).toString()) as { request_id: string }
+        socket.send(JSON.stringify({ type: 'start', request_id: request.request_id,
+          format: 'mp3', sample_rate: 48000, channels: 1 }))
+        socket.send(new Uint8Array([1, 2]), { binary: true })
+        socket.send(JSON.stringify({ type: 'end', request_id: request.request_id }))
+        socket.pause()
+      })
+    })
+    const provider = new MiniStreamSpeechSynthesisProvider(context(), {
+      ...baseConfig, endpoint: harness.endpoint, closeHandshakeTimeoutMs: 20,
+    })
+    const output = await provider.synthesize({ text: '测试' }, new AbortController().signal)
+
+    await expect(collect(output.chunks)).resolves.toEqual([1, 2])
   })
 
   it('fails quickly when generation stalls after start and classifies exhausted capacity', async () => {
@@ -194,12 +222,17 @@ describe('MiniStream speech provider', () => {
     await expect(collect(stalledOutput.chunks)).rejects.toMatchObject({ code: 'PROVIDER_TIMEOUT' })
 
     const busy = await server()
-    busy.server.on('connection', (socket) => { socket.on('message', () => {
-      socket.send(JSON.stringify({ code: 429, state: 'busy', result: 'capacity exhausted' }))
-    }) })
+    let busyCloseCode: number | undefined
+    busy.server.on('connection', (socket) => {
+      socket.on('message', () => {
+        socket.send(JSON.stringify({ code: 429, state: 'busy', result: 'capacity exhausted' }))
+      })
+      socket.on('close', (code) => { busyCloseCode = code })
+    })
     const second = new MiniStreamSpeechSynthesisProvider(context(), { ...baseConfig, endpoint: busy.endpoint })
     const busyOutput = await second.synthesize({ text: '测试' }, new AbortController().signal)
     await expect(collect(busyOutput.chunks)).rejects.toMatchObject({ code: 'PROVIDER_BUSY' })
+    await vi.waitFor(() => { expect(busyCloseCode).toBe(1000) })
   })
 
   it('validates config and registers through a scoped effect', async () => {
@@ -210,6 +243,7 @@ describe('MiniStream speech provider', () => {
       .toThrow(/WSS/)
     expect(() => new MiniStreamSpeechSynthesisProvider(context(), { ...baseConfig, firstAudioTimeoutMs: 1_001 }))
       .toThrow(/firstAudioTimeoutMs/)
+    expect(() => new Config({ ...baseConfig, closeHandshakeTimeoutMs: 0 })).toThrow()
     const ctx = new Context()
     ctx.provide('agents', { get: () => undefined } as never)
     ctx.provide('credentials', { resolve: async () => ({ value: 'trial-token', source: 'test' }) } as never)
