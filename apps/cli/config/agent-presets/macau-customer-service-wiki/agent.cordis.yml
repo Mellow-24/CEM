@@ -50,6 +50,7 @@
         model: qwen3-asr-flash-realtime
         silenceMs: 250
         threshold: 0.75
+        traditionalChineseOutput: true
         maxDurationMs: 3600000
         maxBufferedBytes: 64000
       url: !!js process.env.DSH_MACAU_ASR_URL ?? 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'

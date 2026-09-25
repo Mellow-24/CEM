@@ -93,6 +93,7 @@ const transcriptionConfig: z<SpeechHttpTranscriptionConfig> = z.object({
     model: z.string().required(),
     silenceMs: z.number().step(1).min(200).max(2000).required(),
     threshold: z.number().min(0).max(1).required(),
+    traditionalChineseOutput: z.boolean(),
     maxDurationMs: z.number().step(1).min(1000).max(MAX_TIMER_DELAY_MS).required(),
     maxBufferedBytes: z.number().step(1).min(3200).max(1048576).required(),
   })]),

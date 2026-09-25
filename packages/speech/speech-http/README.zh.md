@@ -35,7 +35,7 @@
 
 ## Qwen 流式识别
 
-可选 `transcription.realtime` 在完整录音识别之外注册 Qwen WebSocket 识别。配置 `url`、`model`、服务端 VAD 的 `silenceMs` 与 `threshold`、`maxDurationMs` 和 `maxBufferedBytes`。凭据保留在 Host。建立连接使用端点超时；响应与转写限制适用于每条事件。收到 `session.updated` 后才视为就绪；取消会关闭连接，畸形事件或队列超限会终止通话。
+可选 `transcription.realtime` 在完整录音识别之外注册 Qwen WebSocket 识别。配置 `url`、`model`、服务端 VAD 的 `silenceMs` 与 `threshold`、`maxDurationMs` 和 `maxBufferedBytes`。可选 `traditionalChineseOutput` 通过 OpenCC 把临时和最终转写中的汉字转换为香港繁体；拉丁文字和提供方语言检测保持不变。凭据保留在 Host。建立连接使用端点超时；响应与转写限制适用于每条事件。收到 `session.updated` 后才视为就绪；取消会关闭连接，畸形事件或队列超限会终止通话。
 
 ## Model Experience
 

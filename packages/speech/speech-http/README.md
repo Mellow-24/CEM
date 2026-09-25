@@ -35,7 +35,7 @@ For Qwen3-ASR-Flash, keep the complete Base64 request below the service's 10 MB 
 
 ## Streaming Qwen ASR
 
-Optional `transcription.realtime` registers Qwen WebSocket recognition alongside complete-recording ASR. Configure `url`, `model`, server VAD `silenceMs` and `threshold`, `maxDurationMs`, and `maxBufferedBytes`. Credentials remain on the Host. Setup uses the endpoint timeout; response and transcript limits apply to each event. The connection becomes ready only after `session.updated`; cancellation closes the socket, and malformed events or queue overflow terminate the call.
+Optional `transcription.realtime` registers Qwen WebSocket recognition alongside complete-recording ASR. Configure `url`, `model`, server VAD `silenceMs` and `threshold`, `maxDurationMs`, and `maxBufferedBytes`. Optional `traditionalChineseOutput` converts Han characters in partial and final transcripts to Hong Kong Traditional Chinese through OpenCC; Latin text and provider language detection remain unchanged. Credentials remain on the Host. Setup uses the endpoint timeout; response and transcript limits apply to each event. The connection becomes ready only after `session.updated`; cancellation closes the socket, and malformed events or queue overflow terminate the call.
 
 ## Model Experience
 

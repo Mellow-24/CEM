@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-03-customer-service-voice-calls.md
-2026-09-03-customer-service-voice-calls.md: d818f418ccf8ef7950a7093ba83e57544b630283
-2026-09-03-customer-service-voice-calls.zh.md: 27145e3778a7cbe849bbcc7ce1eff9e9dfa887ed
+2026-09-03-customer-service-voice-calls.md: 9c78e584b8a6b16db84dae3f462ab7f2e7668c04
+2026-09-03-customer-service-voice-calls.zh.md: e2d21b56fcbf604dac10f5a40e541d12077a0d3f

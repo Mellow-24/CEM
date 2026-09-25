@@ -2165,6 +2165,8 @@ export interface QwenRealtimeConfig {
   readonly silenceMs: number
   /** Server VAD speech detection threshold. */
   readonly threshold: number
+  /** Convert Han characters in partial and final transcripts to Hong Kong Traditional Chinese. */
+  readonly traditionalChineseOutput?: boolean
   /** Maximum connected call duration. */
   readonly maxDurationMs: number
   /** Maximum pending encoded provider input bytes. */

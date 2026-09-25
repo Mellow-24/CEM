@@ -1,7 +1,10 @@
 /** Qwen streaming PCM transcription with server VAD and bounded transport queues. */
 
 import WebSocket from 'ws'
+import OpenCC from 'opencc-js/cn2t'
 import type { SpeechRealtimeEvent, SpeechRealtimeInput } from '@deepseek-ai/dsh-speech-transcription'
+
+const toHongKongTraditional = OpenCC.Converter({ from: 'cn', to: 'hk' })
 
 /** Deployment-specific Qwen streaming recognition settings. */
 export interface QwenRealtimeConfig {
@@ -13,6 +16,8 @@ export interface QwenRealtimeConfig {
   readonly silenceMs: number
   /** Server VAD speech detection threshold. */
   readonly threshold: number
+  /** Convert Han characters in partial and final transcripts to Hong Kong Traditional Chinese. */
+  readonly traditionalChineseOutput?: boolean
   /** Maximum connected call duration. */
   readonly maxDurationMs: number
   /** Maximum pending encoded provider input bytes. */
@@ -42,6 +47,12 @@ export async function openQwenRealtime(
   let ready = false
   let closing = false
   let sequence = 0
+  const transcript = (text: string): string => {
+    if (text.length > maxTextChars) throw new Error('Transcript exceeds limit')
+    const normalized = config.traditionalChineseOutput ? toHongKongTraditional(text) : text
+    if (normalized.length > maxTextChars) throw new Error('Transcript exceeds limit')
+    return normalized
+  }
   let resolveReady!: () => void
   let rejectReady!: (error: Error) => void
   const setup = new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject })
@@ -96,14 +107,13 @@ export async function openQwenRealtime(
         case 'conversation.item.input_audio_transcription.text': {
           if (typeof event['text'] !== 'string' || typeof event['stash'] !== 'string') throw new Error('Invalid partial transcript')
           const text = event['text'] + event['stash']
-          if (text.length > maxTextChars) throw new Error('Transcript exceeds limit')
-          notify({ type: 'partial', text })
+          notify({ type: 'partial', text: transcript(text) })
           break
         }
         case 'conversation.item.input_audio_transcription.completed': {
           const text = event['transcript']
-          if (typeof text !== 'string' || text.length > maxTextChars) throw new Error('Invalid final transcript')
-          notify({ type: 'final', text })
+          if (typeof text !== 'string') throw new Error('Invalid final transcript')
+          notify({ type: 'final', text: transcript(text) })
           break
         }
         case 'error':

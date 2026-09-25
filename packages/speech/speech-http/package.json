@@ -21,6 +21,7 @@
   "license": "MIT",
   "dependencies": {
     "ws": "^8.21.0",
+    "opencc-js": "^1.4.2",
     "@deepseek-ai/schemastery": "workspace:^"
   },
   "peerDependencies": {

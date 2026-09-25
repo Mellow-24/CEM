@@ -59,6 +59,24 @@ describe('Qwen realtime provider', () => {
     } finally { await input.close(); await p.close() }
   })
 
+  it('normalizes configured Chinese output without changing English transcripts', async () => {
+    const p = await peer()
+    const events: SpeechRealtimeEvent[] = []
+    const config = { ...p.config, traditionalChineseOutput: true }
+    const input = await openQwenRealtime(config, {}, 1000, 65536, 100, event => events.push(event), new AbortController().signal)
+    try {
+      const socket = [...p.server.clients][0]!
+      socket.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: '查询电费 ', stash: 'CEM' }))
+      socket.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: '查询电费 CEM' }))
+      socket.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'Where can I pay?' }))
+      await vi.waitFor(() => { expect(events).toEqual([
+        { type: 'partial', text: '查詢電費 CEM' },
+        { type: 'final', text: '查詢電費 CEM' },
+        { type: 'final', text: 'Where can I pay?' },
+      ]) })
+    } finally { await input.close(); await p.close() }
+  })
+
   it('cancels setup before session.updated without leaving a socket', async () => {
     const p = await peer(false)
     const abort = new AbortController()
