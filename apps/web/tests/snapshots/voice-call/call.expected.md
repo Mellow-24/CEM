@@ -4,7 +4,7 @@
     - heading "Customer service voice call" [level=2]
     - status: Speaking…
     - text: You
-    - paragraph: 我现在的自动转账 失败了怎么办？
+    - paragraph: 我現在的自動轉賬 失敗了怎麼辦？
     - text: Assistant
     - paragraph: 自動轉賬失敗，常見原因係賬單已經過期，或者銀行戶口餘額不足。請先確認轉賬當日戶口有足夠資金，亦可以聯絡開戶銀行查詢。如果仲需要協助，請聯絡網上客服。
   - contentinfo:

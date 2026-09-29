@@ -63,9 +63,9 @@ export interface SpeechCallOptions {
   readonly interruption: {
     /** Sustained partial-transcript time required before it can stop playback. */
     readonly confirmationMs: number
-    /** Minimum normalized letters or numbers for a non-final utterance to claim the turn. */
+    /** Minimum normalized letters or numbers for directed final requests and exact playback echo. */
     readonly minimumMeaningfulCharacters: number
-    /** Minimum normalized characters before playback similarity can identify echo. */
+    /** Minimum normalized characters before approximate playback similarity can identify echo. */
     readonly echoMinimumCharacters: number
     /** Bigram similarity at or above which recognized text is treated as playback echo. */
     readonly echoSimilarityThreshold: number

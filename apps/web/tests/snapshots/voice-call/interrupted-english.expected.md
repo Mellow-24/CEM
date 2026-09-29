@@ -1,0 +1,11 @@
+- dialog "Customer service voice call":
+  - banner: LIVE · AI CUSTOMER SERVICE {{clock}}
+  - main:
+    - heading "Customer service voice call" [level=2]
+    - status: Listening. What can we help with?
+    - text: Assistant
+    - paragraph: 自動轉賬失敗，常見原因係賬單已經過期，或者銀行戶口餘額不足。請先確認轉賬當日戶口有足夠資金，亦可以聯絡開戶銀行查詢。如果仲需要協助，請聯絡網上客服。
+  - contentinfo:
+    - paragraph: Speak after the greeting. You can interrupt any answer.
+    - button "End call"
+    - text: End call Submitted messages stay in this conversation

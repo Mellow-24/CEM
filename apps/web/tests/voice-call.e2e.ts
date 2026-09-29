@@ -1,5 +1,6 @@
 /** Real browser capture, Qwen wire adapters, and ordinary Session admission with external providers replayed. */
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,7 +17,7 @@ const REPLY = '自動轉賬失敗，常見原因係賬單已經過期，或者�
 const GREETING = '你好，我係澳電智能客服，請問有咩可以幫到你？'
 const FIRST_PROMPT_SEGMENT = '我现在的自动转账'
 const SECOND_PROMPT_SEGMENT = '失败了怎么办？'
-const PROMPT = `${FIRST_PROMPT_SEGMENT}\n${SECOND_PROMPT_SEGMENT}`
+const PROMPT = '我現在的自動轉賬\n失敗了怎麼辦？'
 const FIXTURE = fileURLToPath(new URL('./snapshots/voice-call/session.jsonl', import.meta.url))
 
 /** PCM sine followed by silence exercises the real browser's utterance detector. */
@@ -43,13 +44,23 @@ function fallbackPcm(): Buffer {
 
 describe.skipIf(MODE === 'record')('web voice calls', () => {
   it.each([
-    { preset: 'macau-customer-service', entry: '/' },
-    { preset: 'macau-customer-service-wiki', entry: '/' },
-    { preset: 'macau-customer-service', entry: '/mobile.html' },
-  ])('retains $preset voice messages after hangup at $entry', async ({ preset, entry }) => {
+    { preset: 'macau-customer-service', entry: '/', stopPhrase: undefined },
+    { preset: 'macau-customer-service-wiki', entry: '/', stopPhrase: undefined },
+    { preset: 'macau-customer-service', entry: '/mobile.html', stopPhrase: undefined },
+    { preset: 'macau-customer-service', entry: '/', stopPhrase: '停一下' },
+    { preset: 'macau-customer-service', entry: '/mobile.html', stopPhrase: 'hold on' },
+  ])('retains $preset voice messages after hangup at $entry with stop phrase $stopPhrase', async ({ preset, entry, stopPhrase }) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-voice-call-'))
     const wave = join(root, 'microphone.wav')
     await writeFile(wave, microphoneWave())
+    const corpus = join(root, 'knowledge')
+    const knowledgeText = `# 自動轉賬\n\n${REPLY}\n`
+    await mkdir(corpus)
+    await writeFile(join(corpus, 'payment.md'), knowledgeText)
+    await writeFile(join(corpus, 'source-manifest.json'), JSON.stringify({
+      version: 1,
+      sources: [{ path: 'payment.md', sha256: createHash('sha256').update(knowledgeText).digest('hex') }],
+    }))
     const priorUrl = process.env.DSH_MACAU_ASR_REALTIME_URL
     const priorTtsUrl = process.env.DSH_MACAU_TTS_REALTIME_URL
     const priorTtsToken = process.env.MACAU_MINISTREAM_TTS_TOKEN
@@ -63,12 +74,25 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
     process.env.MACAU_MINISTREAM_TTS_TOKEN = 'voice-call-fixture-token'
     const fallbackRequests: Array<{ text: string; voice: string; language_type: string }> = []
     const fallbackAuthorizations: Array<string | undefined> = []
+    const retrievalRequests: string[] = []
     const qwenAudio = fallbackPcm().toString('base64')
     const fallbackServer = createServer((request, response) => {
       const chunks: Buffer[] = []
       request.on('data', (chunk: Buffer) => chunks.push(chunk))
       request.on('end', () => {
-        const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+        const serialized = Buffer.concat(chunks).toString('utf8')
+        if (request.url === '/embeddings' || request.url === '/rerank') {
+          expect(request.headers.authorization).toBe('Bearer voice-call-fixture-key')
+          retrievalRequests.push(request.url)
+          const body = JSON.parse(serialized) as { input?: string[]; documents?: string[] }
+          response.writeHead(200, { 'content-type': 'application/json' })
+          response.end(JSON.stringify(request.url === '/embeddings'
+            ? { data: body.input!.map(() => ({ embedding: [1, 0] })) }
+            : { results: body.documents!.map((_, index) => ({ index, relevance_score: 1 })) }))
+          return
+        }
+        expect(request.url).toBe('/qwen-tts')
+        const body = JSON.parse(serialized) as {
           input: { text: string; voice: string; language_type: string }
         }
         fallbackAuthorizations.push(request.headers.authorization)
@@ -86,6 +110,17 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
     const fallbackAddress = fallbackServer.address()
     if (typeof fallbackAddress === 'string' || fallbackAddress === null) throw new Error('HTTP address unavailable')
     process.env.DSH_MACAU_TTS_FALLBACK_URL = `http://127.0.0.1:${String(fallbackAddress.port)}/qwen-tts`
+    const knowledgeEnvironment = {
+      DSH_MACAU_KNOWLEDGE_DIR: corpus,
+      DSH_MACAU_KNOWLEDGE_MANIFEST: join(corpus, 'source-manifest.json'),
+      DSH_MACAU_KNOWLEDGE_INDEX: join(root, 'knowledge-index.json'),
+      DSH_MACAU_EMBEDDING_BASE_URL: `http://127.0.0.1:${String(fallbackAddress.port)}`,
+      DSH_MACAU_RERANKER_URL: `http://127.0.0.1:${String(fallbackAddress.port)}/rerank`,
+    }
+    const priorKnowledgeEnvironment = Object.fromEntries(
+      Object.keys(knowledgeEnvironment).map(key => [key, process.env[key]]),
+    )
+    Object.assign(process.env, knowledgeEnvironment)
     const ttsAudio = await readFile(fileURLToPath(new URL('./snapshots/voice-call/response.mp3', import.meta.url)))
     let socket: WebSocket | undefined
     let pcmFrames = 0
@@ -212,6 +247,8 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
       }
       const completedReplies = () => scaffold.ctx.agents.roots().flatMap(agent => agent.session.events)
         .filter(event => event.type === 'assistant/message').length
+      const submittedPrompts = () => scaffold.ctx.agents.roots().flatMap(agent => agent.session.events)
+        .filter(event => event.type === 'user/message' && event.data.source.kind === 'user').length
       expect(completedReplies()).toBe(0)
       expect(await page.evaluate(() => {
         const media = Reflect.get(window, '__voiceMedia') as Set<HTMLMediaElement>
@@ -256,6 +293,7 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
       await expect.poll(() => ttsTexts.length, { timeout: 15000 }).toBeGreaterThanOrEqual(1)
       await page.getByText('Speaking…', { exact: true }).waitFor()
       await expect.poll(completedReplies, { timeout: 15000 }).toBe(1)
+      if (preset === 'macau-customer-service') expect(retrievalRequests).toContain('/rerank')
       const callContext = scaffold.ctx.agents.roots().flatMap(agent => agent.session.events)
         .find(event => event.type === 'user/message'
           && event.data.source.kind === 'plugin'
@@ -283,6 +321,19 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
         return Math.abs(container.scrollHeight - container.clientHeight - container.scrollTop) < 2
       })
       await expect.poll(captionsAtBottom).toBe(true)
+      for (const text of ['', '好的', '你今晚想食啲乜？', 'Where can I pay my electricity bill?']) {
+        const framesBefore = pcmFrames
+        socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
+        if (text !== '') {
+          socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text, stash: '' }))
+          socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: text }))
+        }
+        await expect.poll(() => pcmFrames, { timeout: 5000 }).toBeGreaterThan(framesBefore + 12)
+        expect(await dialog.getByText('Speaking…', { exact: true }).count()).toBe(1)
+        expect(submittedPrompts()).toBe(1)
+        expect(completedReplies()).toBe(1)
+        if (text !== '') expect(await dialog.getByText(text, { exact: true }).count()).toBe(0)
+      }
       const aria = (await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)).replace(/\b\d{2}:\d{2}\b/g, '00:00')
       await compareOrRefreshGolden(fileURLToPath(new URL('./snapshots/voice-call/call.expected.md', import.meta.url)), aria, MODE)
       await page.screenshot({ path: `/tmp/dsh-realtime-${preset}.png` })
@@ -292,16 +343,32 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
         await expect.poll(captionsAtBottom).toBe(true)
         await page.screenshot({ path: '/tmp/dsh-realtime-mobile.png' })
       }
-      releaseTtsFailure()
-      await expect.poll(() => fallbackRequests.length, { timeout: 20000 }).toBeGreaterThanOrEqual(1)
-      expect(fallbackRequests[0]).toEqual({ text: ttsTexts[2], voice: 'Kiki', language_type: 'Chinese' })
-      await page.getByText('Listening. What can we help with?', { exact: true }).waitFor({ timeout: 20000 })
-      expect(fallbackAuthorizations.every(value => value === 'Bearer voice-call-fixture-key')).toBe(true)
-      expect(await assistantCaption.textContent()).toBe(REPLY)
-      expect(await dialog.getByRole('alert').count()).toBe(0)
-      const fallbackAria = (await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd))
-        .replace(/\b\d{2}:\d{2}\b/g, '00:00')
-      await compareOrRefreshGolden(fileURLToPath(new URL('./snapshots/voice-call/tts-fallback.expected.md', import.meta.url)), fallbackAria, MODE)
+      if (stopPhrase === undefined) {
+        releaseTtsFailure()
+        await expect.poll(() => fallbackRequests.length, { timeout: 20000 }).toBeGreaterThanOrEqual(1)
+        expect(fallbackRequests[0]).toEqual({ text: ttsTexts[2], voice: 'Kiki', language_type: 'Chinese' })
+        await page.getByText('Listening. What can we help with?', { exact: true }).waitFor({ timeout: 20000 })
+        expect(fallbackAuthorizations.every(value => value === 'Bearer voice-call-fixture-key')).toBe(true)
+        expect(await assistantCaption.textContent()).toBe(REPLY)
+        expect(await dialog.getByRole('alert').count()).toBe(0)
+        const fallbackAria = (await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd))
+          .replace(/\b\d{2}:\d{2}\b/g, '00:00')
+        await compareOrRefreshGolden(fileURLToPath(new URL('./snapshots/voice-call/tts-fallback.expected.md', import.meta.url)), fallbackAria, MODE)
+      } else {
+        socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
+        socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: stopPhrase, stash: '' }))
+        socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: stopPhrase }))
+        await page.getByText('Listening. What can we help with?', { exact: true }).waitFor({ timeout: 5000 })
+        const framesAfterStop = pcmFrames
+        await expect.poll(() => pcmFrames, { timeout: 5000 }).toBeGreaterThan(framesAfterStop + 12)
+        expect(submittedPrompts()).toBe(1)
+        expect(completedReplies()).toBe(1)
+        expect(fallbackRequests).toEqual([])
+        expect(await assistantCaption.textContent()).toBe(REPLY)
+        const interruptedAria = (await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd))
+          .replace(/\b\d{2}:\d{2}\b/g, '00:00')
+        await compareOrRefreshGolden(fileURLToPath(new URL(`./snapshots/voice-call/interrupted-${stopPhrase === '停一下' ? 'cantonese' : 'english'}.expected.md`, import.meta.url)), interruptedAria, MODE)
+      }
       const framesAfterFallback = pcmFrames
       await expect.poll(() => pcmFrames, { timeout: 5000 }).toBeGreaterThan(framesAfterFallback)
       socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
@@ -338,6 +405,10 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
       else process.env.DSH_MACAU_TTS_FALLBACK_URL = priorFallbackUrl
       if (prior === undefined) Reflect.deleteProperty(process.env, 'DASHSCOPE_API_KEY')
       else process.env.DASHSCOPE_API_KEY = prior
+      for (const [key, value] of Object.entries(priorKnowledgeEnvironment)) {
+        if (value === undefined) Reflect.deleteProperty(process.env, key)
+        else process.env[key] = value
+      }
       await rm(root, { recursive: true, force: true })
     }
   }, 60000)

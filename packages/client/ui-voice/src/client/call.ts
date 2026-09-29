@@ -2,7 +2,7 @@
 
 import { VoiceSentenceQueue } from './sentences.ts'
 import { CallTranscript } from './call-transcript.ts'
-import { classifyInterruption } from './interruption.ts'
+import { classifyInterruption, isStandaloneStopRequest } from './interruption.ts'
 import type { CallTranscriptEntry } from './call-transcript.ts'
 import type { AssistantBlock, AssistantMessageNode, SessionFace } from '@deepseek-ai/dsh-client-runtime/client'
 import type { MessageId } from '@deepseek-ai/dsh-client-connection/client'
@@ -190,10 +190,13 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
     let utterance = ''
     let utteranceTimer: ReturnType<typeof setTimeout> | undefined
     let interruptionTimer: ReturnType<typeof setTimeout> | undefined
-    let interruptionStartedAt = 0
-    let interruptionDuringPlayback = false
-    let interruptionConfirmed = false
-    let interruptionHypothesis = ''
+    let interruption: {
+      startedAt: number | undefined
+      required: boolean
+      confirmed: boolean
+      hypothesis: string
+      answer: string
+    } | undefined
     let muted = false
     let awaitSpeechStart = false
     let synthesisProfile = synthesis.profile
@@ -224,16 +227,20 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
       this.publish({ phase: 'listening', transcript: this.view.transcript, answer: this.view.answer,
         ...(this.view.muted === undefined ? {} : { muted: this.view.muted }) })
     }
+    const resetInterruption = (): void => {
+      clearTimeout(interruptionTimer)
+      interruptionTimer = undefined
+      interruption = undefined
+    }
     this.controls = {
-      interrupt,
+      interrupt: () => { resetInterruption(); interrupt() },
       mute: (value) => {
         if (combined.aborted || muted === value) return
         muted = value
         awaitSpeechStart = true
         clearTimeout(utteranceTimer)
         utteranceTimer = undefined
-        clearTimeout(interruptionTimer)
-        interruptionTimer = undefined
+        resetInterruption()
         utterance = ''
         this.transcript.finishUtterance(false)
         pending = []
@@ -288,7 +295,12 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
             }
           } catch (error) {
             if (!replySignal.aborted) throw error
-          } finally { await sentences.close(); await cancelOwned(); replyAbort = undefined }
+          } finally {
+            await sentences.close()
+            await cancelOwned()
+            if (interruption?.required && !interruption.confirmed) interruption.answer = this.view.answer
+            replyAbort = undefined
+          }
           if (signal.aborted || lifetime.signal.aborted) break
           this.publish({ ...this.view, phase: 'listening' })
         }
@@ -308,27 +320,37 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
         drain()
       }, call.utteranceMergeMs)
     }
-    const beginInterruptionCandidate = (): void => {
-      clearTimeout(interruptionTimer)
-      interruptionTimer = undefined
-      interruptionStartedAt = Date.now()
-      interruptionDuringPlayback = this.view.phase === 'playing'
-      interruptionConfirmed = false
-      interruptionHypothesis = ''
+    const beginInterruptionCandidate = () => {
+      resetInterruption()
+      interruption = {
+        startedAt: undefined,
+        required: replyAbort !== undefined && !replyAbort.signal.aborted,
+        confirmed: false,
+        hypothesis: '',
+        answer: this.view.answer,
+      }
+      return interruption
     }
     const confirmInterruption = (text: string, final: boolean): 'accepted' | 'ignored' | 'waiting' => {
-      if (!interruptionDuringPlayback || interruptionConfirmed) return 'accepted'
-      interruptionHypothesis = text
+      const candidate = interruption ?? beginInterruptionCandidate()
+      if (replyAbort !== undefined && !replyAbort.signal.aborted) {
+        candidate.required = true
+        candidate.answer = this.view.answer
+      }
+      if (!candidate.required || candidate.confirmed) return 'accepted'
+      candidate.startedAt ??= Date.now()
+      const startedAt = candidate.startedAt
+      candidate.hypothesis = text
       const decision = classifyInterruption({
         text,
-        answer: this.view.answer,
+        answer: candidate.answer,
         final,
-        elapsedMs: Date.now() - interruptionStartedAt,
+        elapsedMs: Date.now() - startedAt,
       }, call.interruption)
       if (decision === 'interrupt') {
         clearTimeout(interruptionTimer)
         interruptionTimer = undefined
-        interruptionConfirmed = true
+        candidate.confirmed = true
         interrupt()
         return 'accepted'
       }
@@ -338,19 +360,23 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
         return 'ignored'
       }
       if (interruptionTimer === undefined) {
-        const delay = Math.max(0, call.interruption.confirmationMs - (Date.now() - interruptionStartedAt))
+        const delay = Math.max(0, call.interruption.confirmationMs - (Date.now() - startedAt))
         interruptionTimer = setTimeout(() => {
           interruptionTimer = undefined
-          if (!interruptionDuringPlayback || interruptionConfirmed || interruptionHypothesis === '') return
+          if (interruption !== candidate || candidate.confirmed || candidate.hypothesis === '') return
+          if (replyAbort !== undefined && !replyAbort.signal.aborted) candidate.answer = this.view.answer
           const delayed = classifyInterruption({
-            text: interruptionHypothesis,
-            answer: this.view.answer,
+            text: candidate.hypothesis,
+            answer: candidate.answer,
             final: false,
-            elapsedMs: Date.now() - interruptionStartedAt,
+            elapsedMs: Date.now() - startedAt,
           }, call.interruption)
           if (delayed === 'interrupt') {
-            interruptionConfirmed = true
+            candidate.confirmed = true
             interrupt()
+            const transcript = appendUtteranceSegment(utterance, candidate.hypothesis)
+            this.transcript.recognize(transcript)
+            this.publish({ ...this.view, transcript })
           }
         }, delay)
       }
@@ -376,33 +402,32 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
             break
           case 'partial': {
             if (event.text.trim() === '') break
+            if (confirmInterruption(event.text, false) !== 'accepted') break
             clearTimeout(utteranceTimer)
             utteranceTimer = undefined
-            if (interruptionStartedAt === 0) beginInterruptionCandidate()
             const transcript = appendUtteranceSegment(utterance, event.text)
             this.transcript.recognize(transcript)
             this.publish({ ...this.view, transcript })
-            if (!interruptionDuringPlayback) interrupt()
-            else confirmInterruption(transcript, false)
+            interrupt()
             break
           }
           case 'final': {
             const text = event.text.trim()
-            if (text === '') break
-            if (interruptionStartedAt === 0) beginInterruptionCandidate()
-            const transcript = appendUtteranceSegment(utterance, text)
-            const decision = confirmInterruption(transcript, true)
-            interruptionStartedAt = 0
-            interruptionDuringPlayback = false
-            interruptionConfirmed = false
-            interruptionHypothesis = ''
-            if (decision === 'ignored') {
+            if (text === '') { resetInterruption(); break }
+            const decision = confirmInterruption(text, true)
+            resetInterruption()
+            if (decision !== 'accepted') break
+            interrupt()
+            if (isStandaloneStopRequest(text)) {
+              clearTimeout(utteranceTimer)
+              utteranceTimer = undefined
+              utterance = ''
+              pending = []
               this.transcript.discardUtterance()
-              this.publish({ ...this.view, transcript: utterance })
+              this.publish({ ...this.view, phase: 'listening', transcript: '' })
               break
             }
-            if (decision === 'accepted') interrupt()
-            utterance = transcript
+            utterance = appendUtteranceSegment(utterance, text)
             this.transcript.recognize(utterance)
             this.publish({ ...this.view, phase: 'transcribing', transcript: utterance })
             scheduleUtterance()

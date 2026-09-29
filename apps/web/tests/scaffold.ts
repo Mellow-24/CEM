@@ -118,7 +118,7 @@ const REPLAY_PROVIDERS = [{
   name: '外部模型服务',
   models: [
     { id: 'qwen3.7-plus', name: '客服质检模型', contextWindow: 1_048_576 },
-    { id: 'qwen3.7-flash', name: '客服回答模型', contextWindow: 1_048_576 },
+    { id: 'qwen3.7-flash', name: '客服回答模型', contextWindow: 1_048_576, reasoningEfforts: ['off'] },
   ],
 }]
 

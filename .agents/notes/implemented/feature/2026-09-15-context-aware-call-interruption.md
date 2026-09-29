@@ -10,11 +10,11 @@ Stopping an audible answer on the first nonempty ASR hypothesis confuses recogni
 
 ## Decision
 
-The shared browser voice controller screens interruption intent only while answer audio is audible. Speech onset starts a candidate and keeps recognition active without stopping playback. A final ASR utterance is classified immediately; a partial hypothesis must remain meaningful for the deployment-configured `confirmationMs` before it can interrupt.
+The shared browser voice controller screens recognized text locally before cancelling an answer. Speech onset starts a candidate and keeps recognition active without stopping playback. The admission criteria, confirmation clock, and activation window are governed by [explicit call interruption](../bug-fix/2026-09-29-explicit-call-interruption.md), which supersedes playback-only screening and length-based turn claims.
 
-Classification combines ASR finality and elapsed speech with normalized information length, character diversity, question or correction form, whole-utterance backchannel structure, and similarity to the active answer. A meaningful utterance can claim the turn without matching a listed phrase. Short complete acknowledgements and likely playback echo are removed from the call-local draft without entering Session history. A confirmed interruption keeps the existing cancellation, interrupted-question carry-forward, and final-segment merge behavior. The manual interrupt action remains immediate.
+Classification uses ASR finality, explicit request form, whole-utterance backchannel structure, and similarity to the active answer. Rejected hypotheses do not enter Session history. A confirmed interruption keeps the existing cancellation, interrupted-question carry-forward, and final-segment merge behavior. The manual interrupt action remains immediate.
 
-The Host advertises all deployment-varying timing and thresholds under `call.interruption`: `confirmationMs`, `minimumMeaningfulCharacters`, `echoMinimumCharacters`, `echoSimilarityThreshold`, and `backchannelMaximumCharacters`. The CEM Web deployment uses 420 ms confirmation, three meaningful characters, six characters before echo comparison, 0.82 similarity, and six characters for short acknowledgements.
+The Host advertises deployment timing and thresholds under `call.interruption`. The [voice client](../../../../packages/client/ui-voice/README.md#voice-calls) owns their current interpretation.
 
 ## Alternatives considered
 
@@ -28,6 +28,6 @@ The Host advertises all deployment-varying timing and thresholds under `call.int
 
 ## Consequences
 
-Ordinary acknowledgements and likely speaker echo no longer stop audible answers, while explicit short corrections and general meaningful questions remain interruptible. Partial interruption gains up to the configured confirmation delay. The classifier is not speaker verification or an open-ended language model: meaningful bystander speech may still claim the turn, and unusual one- or two-character corrections may be ignored. Unit tests pin timing, acknowledgement removal, playback similarity, multilingual short corrections, continuation cancellation, profile validation, and Host advertisement.
+Local screening adds no model request. Explicit interruption retains cancellation and continuation behavior; the superseding policy narrows which utterances can enter that path. The classifier does not verify speaker identity. Unit tests pin acknowledgement removal, playback similarity, continuation cancellation, profile validation, and Host advertisement.
 
 This partially supersedes the recognized-text interruption decision in [call history and interrupted-question continuations](../bug-fix/2026-09-14-call-history-and-continuations.md); its transcript retention, carry-forward, merge interval, and durable Session admission remain active.

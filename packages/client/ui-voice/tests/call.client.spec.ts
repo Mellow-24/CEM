@@ -157,6 +157,7 @@ describe('continuous voice calls', () => {
   it('manually interrupts an owned answer and retains the recognition connection', async () => {
     const b = liveBench()
     await ask(b)
+    b.emit({ type: 'partial', text: '好的' })
     b.call.interrupt()
     await vi.waitFor(() => { expect(b.cancel).toHaveBeenCalledOnce() })
     expect(b.close).not.toHaveBeenCalled()
@@ -167,6 +168,63 @@ describe('continuous voice calls', () => {
     b.call.interrupt()
     b.call.setMuted(true)
     expect(b.call.getSnapshot().phase).toBe('idle')
+  })
+
+  it.each([
+    { partial: false, text: '停一下' },
+    { partial: true, text: '停一下' },
+    { partial: false, text: 'Please stop.' },
+    { partial: true, text: 'Please stop.' },
+  ])('stops without prompting for $text (confirmed partial: $partial)', async ({ partial, text }) => {
+    vi.useFakeTimers()
+    const b = liveBench()
+    try {
+      await ask(b)
+      b.update({ partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: '請準備最近一期帳單。' }] } })
+      await vi.advanceTimersByTimeAsync(0)
+      b.emit({ type: 'speech-start' })
+      if (partial) {
+        b.emit({ type: 'partial', text })
+        await vi.advanceTimersByTimeAsync(420)
+        expect(b.cancel).toHaveBeenCalledOnce()
+      }
+      b.emit({ type: 'final', text })
+      await vi.advanceTimersByTimeAsync(20)
+      expect(b.cancel).toHaveBeenCalledOnce()
+      expect(b.prompt).toHaveBeenCalledOnce()
+      expect(b.call.getSnapshot()).toMatchObject({ phase: 'listening', transcript: '' })
+      expect(b.call.getSnapshot().messages.some(message => message.speaker === 'user' && message.text === text)).toBe(false)
+      b.emit({ type: 'speech-start' })
+      b.emit({ type: 'final', text: '上個月帳單要點查' })
+      await vi.advanceTimersByTimeAsync(10)
+      expect(b.prompt).toHaveBeenCalledTimes(2)
+      expect(b.prompt).toHaveBeenLastCalledWith([{ type: 'text', text: '账单怎么查\n上個月帳單要點查' }], 'queue')
+    } finally { await b.call.stop(); vi.useRealTimers() }
+  })
+
+  it('clears a queued correction when a stop command arrives before cancellation settles', async () => {
+    vi.useFakeTimers()
+    const b = liveBench()
+    const settle = b.cancel.getMockImplementation()!
+    const cancelled = deferred<undefined>()
+    b.cancel.mockImplementationOnce(async () => { await cancelled.promise; return await settle() })
+    try {
+      await ask(b)
+      b.emit({ type: 'final', text: '停一下，我想查上個月帳單' })
+      await vi.advanceTimersByTimeAsync(10)
+      expect(b.cancel).toHaveBeenCalledOnce()
+      expect(b.prompt).toHaveBeenCalledOnce()
+      b.emit({ type: 'final', text: '停一下' })
+      cancelled.resolve(undefined)
+      await vi.advanceTimersByTimeAsync(100)
+      expect(b.call.getSnapshot().phase).toBe('listening')
+      expect(b.prompt).toHaveBeenCalledOnce()
+      b.emit({ type: 'speech-start' })
+      b.emit({ type: 'final', text: '如何申請用電' })
+      await vi.advanceTimersByTimeAsync(10)
+      expect(b.prompt).toHaveBeenCalledTimes(2)
+      expect(b.prompt).toHaveBeenLastCalledWith([{ type: 'text', text: '账单怎么查\n如何申請用電' }], 'queue')
+    } finally { cancelled.resolve(undefined); await b.call.stop(); vi.useRealTimers() }
   })
 
   it('coalesces queued audio without accumulating latency when uploads take longer than a microphone frame', async () => {
@@ -330,11 +388,11 @@ describe('continuous voice calls', () => {
     b.emit({ type: 'partial', text: ' ' })
     expect(b.cancel).not.toHaveBeenCalled()
     expect(b.call.getSnapshot()).toMatchObject({ phase: 'playing', answer: '請準備帳單。' })
-    b.emit({ type: 'final', text: '上個月的帳單' })
+    b.emit({ type: 'final', text: '停一下，我想查上個月帳單' })
     await vi.waitFor(() => { expect(b.cancel).toHaveBeenCalledOnce() })
     await vi.waitFor(() => { expect(b.prompt).toHaveBeenCalledTimes(2) })
-    expect(b.prompt).toHaveBeenLastCalledWith([{ type: 'text', text: '账单怎么查\n上個月的帳單' }], 'queue')
-    expect(b.call.getSnapshot().messages.map(({ text }) => text)).toEqual(['你好。', '账单怎么查', '請準備帳單。', '上個月的帳單'])
+    expect(b.prompt).toHaveBeenLastCalledWith([{ type: 'text', text: '账单怎么查\n停一下，我想查上個月帳單' }], 'queue')
+    expect(b.call.getSnapshot().messages.map(({ text }) => text)).toEqual(['你好。', '账单怎么查', '請準備帳單。', '停一下，我想查上個月帳單'])
     expect(b.call.getSnapshot().messages[2]?.status).toBe('interrupted')
     b.finish('可以查詢上個月的帳單。')
     await vi.waitFor(() => { expect(b.platform.play).toHaveBeenCalledTimes(2) })
@@ -356,7 +414,8 @@ describe('continuous voice calls', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(b.platform.play).toHaveBeenCalledOnce()
       b.emit({ type: 'speech-start' })
-      b.emit({ type: 'partial', text: '我想改查上個月帳單' })
+      await vi.advanceTimersByTimeAsync(300)
+      b.emit({ type: 'partial', text: '停一下' })
       await vi.advanceTimersByTimeAsync(419)
       expect(b.cancel).not.toHaveBeenCalled()
       expect(b.call.getSnapshot().phase).toBe('playing')
@@ -376,12 +435,144 @@ describe('continuous voice calls', () => {
       b.emit({ type: 'speech-start' })
       b.emit({ type: 'partial', text })
       b.emit({ type: 'final', text })
-      expect(b.call.getSnapshot()).toMatchObject({ phase: 'playing', transcript: '' })
+      expect(b.call.getSnapshot()).toMatchObject({ phase: 'playing', transcript: '账单怎么查' })
       expect(b.call.getSnapshot().messages.some(message => message.text === text)).toBe(false)
     }
     expect(b.cancel).not.toHaveBeenCalled()
     expect(b.prompt).toHaveBeenCalledOnce()
     await b.call.stop()
+  })
+
+  it.each(['thinking', 'generating', 'playing'] as const)('ignores acknowledgements and background chatter throughout %s', async (phase) => {
+    vi.useFakeTimers()
+    const b = liveBench()
+    try {
+      await ask(b)
+      if (phase === 'generating') b.setAutoPlaying(false)
+      if (phase !== 'thinking') {
+        b.update({ partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: '請準備最近一期帳單。' }] } })
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      expect(b.call.getSnapshot().phase).toBe(phase)
+      const messages = b.call.getSnapshot().messages
+      for (const text of ['好的', '係呀係呀', 'Where is my phone?', '今天天氣真好', '我想查電費']) {
+        b.emit({ type: 'speech-start' })
+        b.emit({ type: 'partial', text })
+        expect(b.call.getSnapshot().messages).toEqual(messages)
+        b.emit({ type: 'final', text })
+        expect(b.call.getSnapshot().phase).toBe(phase)
+        expect(b.call.getSnapshot().messages).toEqual(messages)
+      }
+      await vi.advanceTimersByTimeAsync(500)
+      expect(b.cancel).not.toHaveBeenCalled()
+      expect(b.prompt).toHaveBeenCalledOnce()
+      expect(b.call.getSnapshot().phase).toBe(phase)
+    } finally { await b.call.stop(); vi.useRealTimers() }
+  })
+
+  it.each(['thinking', 'generating'] as const)('accepts a clear stop request during %s', async (phase) => {
+    const b = liveBench()
+    await ask(b)
+    if (phase === 'generating') {
+      b.setAutoPlaying(false)
+      b.update({ partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: '請準備帳單。' }] } })
+      await vi.waitFor(() => { expect(b.call.getSnapshot().phase).toBe('generating') })
+    }
+    b.emit({ type: 'final', text: '停一下，我想查上個月帳單' })
+    await vi.waitFor(() => { expect(b.cancel).toHaveBeenCalledOnce() })
+    await vi.waitFor(() => { expect(b.prompt).toHaveBeenCalledTimes(2) })
+    expect(b.prompt).toHaveBeenLastCalledWith([{ type: 'text', text: '账单怎么查\n停一下，我想查上個月帳單' }], 'queue')
+    await b.call.stop()
+  })
+
+  it.each([false, true])('screens a final whose onset preceded playback completion (partial: %s)', async (partial) => {
+    vi.useFakeTimers()
+    const b = liveBench()
+    try {
+      await ask(b)
+      b.finish('請準備最近一期帳單。')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(b.call.getSnapshot().phase).toBe('playing')
+      b.emit({ type: 'speech-start' })
+      if (partial) b.emit({ type: 'partial', text: '好的' })
+      b.playback()!.onEnded()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(b.call.getSnapshot().phase).toBe('listening')
+      b.emit({ type: 'final', text: '好的' })
+      await vi.advanceTimersByTimeAsync(500)
+      expect(b.prompt).toHaveBeenCalledOnce()
+      expect(b.cancel).not.toHaveBeenCalled()
+      expect(b.call.getSnapshot().messages.some(message => message.text === '好的')).toBe(false)
+      b.emit({ type: 'speech-start' })
+      b.emit({ type: 'final', text: '如何申請用電' })
+      await vi.advanceTimersByTimeAsync(10)
+      expect(b.prompt).toHaveBeenCalledTimes(2)
+      expect(b.prompt).toHaveBeenLastCalledWith([{ type: 'text', text: '如何申請用電' }], 'queue')
+    } finally { await b.call.stop(); vi.useRealTimers() }
+  })
+
+  it('clears pending interruption confirmation when the microphone is muted', async () => {
+    vi.useFakeTimers()
+    const b = liveBench()
+    try {
+      await ask(b)
+      b.finish('請準備最近一期帳單。')
+      await vi.advanceTimersByTimeAsync(0)
+      b.emit({ type: 'speech-start' })
+      b.emit({ type: 'partial', text: '停一下' })
+      b.call.setMuted(true)
+      b.call.setMuted(false)
+      b.emit({ type: 'final', text: '停一下，我想查上個月帳單' })
+      await vi.advanceTimersByTimeAsync(500)
+      expect(b.call.getSnapshot()).toMatchObject({ phase: 'playing', transcript: '', muted: false })
+      expect(b.call.getSnapshot().messages.some(message => message.text.includes('停一下'))).toBe(false)
+      expect(b.prompt).toHaveBeenCalledOnce()
+      expect(b.cancel).not.toHaveBeenCalled()
+      b.emit({ type: 'speech-start' })
+      b.emit({ type: 'final', text: '好的' })
+      await vi.advanceTimersByTimeAsync(500)
+      expect(b.call.getSnapshot().phase).toBe('playing')
+    } finally { await b.call.stop(); vi.useRealTimers() }
+  })
+
+  it('retains the completed answer as echo context for a late recognizer final', async () => {
+    vi.useFakeTimers()
+    const b = liveBench()
+    try {
+      await ask(b)
+      b.update({ partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: '資料包括' }] } })
+      b.emit({ type: 'speech-start' })
+      b.emit({ type: 'partial', text: '唔係' })
+      b.finish('資料包括唔係，我想問繳費方式。')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(b.platform.play).toHaveBeenCalledOnce()
+      b.playback()!.onEnded()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(b.call.getSnapshot().phase).toBe('listening')
+      b.emit({ type: 'final', text: '唔係，我想問繳費方式' })
+      await vi.advanceTimersByTimeAsync(500)
+      expect(b.prompt).toHaveBeenCalledOnce()
+      expect(b.cancel).not.toHaveBeenCalled()
+      expect(b.call.getSnapshot().messages.filter(message => message.speaker === 'user')).toHaveLength(1)
+    } finally { await b.call.stop(); vi.useRealTimers() }
+  })
+
+  it('discards an abandoned stop hypothesis when its final transcript is empty', async () => {
+    vi.useFakeTimers()
+    const b = liveBench()
+    try {
+      await ask(b)
+      b.update({ partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: '請準備最近一期帳單。' }] } })
+      await vi.advanceTimersByTimeAsync(0)
+      b.emit({ type: 'speech-start' })
+      b.emit({ type: 'partial', text: '停一下' })
+      b.emit({ type: 'final', text: ' ' })
+      await vi.advanceTimersByTimeAsync(500)
+      expect(b.call.getSnapshot().phase).toBe('playing')
+      expect(b.call.getSnapshot().messages.some(message => message.text === '停一下')).toBe(false)
+      expect(b.cancel).not.toHaveBeenCalled()
+      expect(b.prompt).toHaveBeenCalledOnce()
+    } finally { await b.call.stop(); vi.useRealTimers() }
   })
 
   it('collects several supplemental segments while cancellation is settling', async () => {
@@ -390,7 +581,7 @@ describe('continuous voice calls', () => {
     const cancelled = deferred<undefined>()
     b.cancel.mockImplementationOnce(async () => { await cancelled.promise; return await settle() })
     await ask(b)
-    b.emit({ type: 'final', text: '上個月的' })
+    b.emit({ type: 'final', text: '停一下，上個月的' })
     await vi.waitFor(() => { expect(b.cancel).toHaveBeenCalledOnce() })
     await new Promise(resolve => setTimeout(resolve, 20))
     b.emit({ type: 'final', text: '還有繳費方式' })
@@ -398,7 +589,7 @@ describe('continuous voice calls', () => {
     expect(b.prompt).toHaveBeenCalledOnce()
     cancelled.resolve(undefined)
     await vi.waitFor(() => { expect(b.prompt).toHaveBeenCalledTimes(2) })
-    expect(b.prompt).toHaveBeenLastCalledWith([{ type: 'text', text: '账单怎么查\n上個月的\n還有繳費方式' }], 'queue')
+    expect(b.prompt).toHaveBeenLastCalledWith([{ type: 'text', text: '账单怎么查\n停一下，上個月的\n還有繳費方式' }], 'queue')
     await b.call.stop()
   })
 
@@ -423,7 +614,7 @@ describe('continuous voice calls', () => {
     b.update({ partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: '你好。' }] } })
     await vi.waitFor(() => { expect(b.platform.play).toHaveBeenCalledOnce() })
     b.emit({ type: 'speech-start' })
-    b.emit({ type: 'final', text: '我想换个问题' })
+    b.emit({ type: 'final', text: '停一下，我想换个问题' })
     await vi.waitFor(() => { expect(b.prompt).toHaveBeenCalledTimes(2) })
     expect(b.cancel).toHaveBeenCalledOnce()
     expect(b.client.synthesizeSentence).toHaveBeenCalledOnce()
@@ -448,7 +639,7 @@ describe('continuous voice calls', () => {
     b.update({ partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: '你好。' }] } })
     await vi.waitFor(() => { expect(b.platform.play).toHaveBeenCalledOnce() })
     b.emit({ type: 'speech-start' })
-    b.emit({ type: 'final', text: '我要查账单' })
+    b.emit({ type: 'final', text: '停一下，我要查账单' })
     await vi.waitFor(() => { expect(b.cancel).toHaveBeenCalledOnce() })
     expect(b.prompt).toHaveBeenCalledOnce()
     await settle()
