@@ -35,6 +35,13 @@
         echoMinimumCharacters: 6
         echoSimilarityThreshold: 0.82
         backchannelMaximumCharacters: 6
+        semantic:
+          provider: qwen-dashscope
+          model: qwen3.7-flash
+          timeoutMs: 1500
+          maxInputChars: 6000
+          maxOutputTokens: 32
+          maxConcurrent: 4
       responseTimeoutMs: 180000
       sentenceMaxChars: 72
       sentencePauseMinChars: 12
