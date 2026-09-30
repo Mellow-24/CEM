@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-The Host Consumer exposing agent-scoped speech profiles through exact authority-checked raw Fetch routes registered on `ctx.connection`. It neither accepts audio as model content nor writes speech events.
+The Host Consumer exposing agent-scoped speech profiles through exact authority-checked raw Fetch routes registered on `ctx.connection`. Audio stays outside model content; optional interruption classification logs its text request without producing a conversation message.
 
 ## Routes
 
@@ -11,6 +11,7 @@ The Host Consumer exposing agent-scoped speech profiles through exact authority-
 | `GET /api/speech/profile?sessionId=&profile?=` | Resolves public transcription and synthesis metadata independently for the exact live root Agent. An unavailable capability is absent. |
 | `POST /api/speech/transcribe?sessionId=&profile?=` | Accepts one complete raw audio body with an `audio/*` Content-Type and returns `{ text, language? }`. It does not submit the text. |
 | `GET /api/speech/synthesize?sessionId=&messageId=&profile?=` | Verifies an append-origin committed `assistant/message`, extracts only non-empty text blocks, and returns its encoded TTS stream. |
+| `POST /api/speech/interruption` | Classifies an overlapping utterance for a live root Session when semantic interruption is configured. Returns `interrupt` or `continue`; it does not cancel playback or submit a message. |
 
 All routes use Connection's configured authority trust check, defaulting to `loopback`. The transcription route additionally registers `maxTranscriptionBodyBytes` with Connection, so the Node bridge rejects an oversized body before buffering it; profile metadata advertises the smaller of this transport cap and the selected provider's `maxBytes`, and the handler enforces the same effective value again. The default transport cap is 16 MiB and remains configurable.
 
@@ -30,6 +31,20 @@ Synthesis reads the matching turn and step’s `response-language/resolved` even
 
 ## Model Experience
 
+### Auxiliary interruption classification
+
+#### What the model sees
+
+Optional `call.interruption.semantic` selects `provider`, `model`, `timeoutMs`, `maxInputChars`, `maxOutputTokens`, and `maxConcurrent`. Its fixed classifier instruction and JSON-framed recent caller questions, current question, actually audible playback, and candidate utterance are recorded in `speech/interruption-request` before inference. The event is log-only and ignorable by older readers. Caller-supplied text is data, not instructions. Only the timeout is advertised to browsers. Classification never changes ASR, reply language, retrieval, or TTS configuration.
+
+#### Token effect
+
+One bounded request per screened final candidate, with reasoning off and no retry or retrieval. Empty and single-character input is rejected before inference. One active request per Session and a global concurrency limit bound provider use. One replacement candidate may wait for its cancelled predecessor within its own deadline, without parallel inference. Timeout, cancellation, malformed output, and unavailable capacity return `continue`; occupied capacity remains held until the provider settles.
+
+#### KV Cache effect
+
+Auxiliary requests use a stable system instruction and a short dynamic user message. They do not append model-history messages or modify the conversation model's cache prefix.
+
 ### Active voice-call response instructions
 
 #### What the model sees
@@ -46,5 +61,6 @@ The first model step after call connection changes the runtime-context prefix. F
 
 ## Known Limitations and Deferred Work
 
+- **Text-only interruption intent** — classification cannot establish speaker identity. Provider latency delays natural interruption decisions; failures conservatively keep playback running, while explicit local stop commands remain available.
 - **Live ordinary Sessions only** — profile and media routes do not resume cold Sessions and reject delegated Agents; the Web session resolver needs a shared cold-resume API before historical playback can be transparent.
 - **Audible content cannot be retracted** — calls synthesize sentences before generation finishes; retries can revise the final answer and cancellation only stops subsequent audio.

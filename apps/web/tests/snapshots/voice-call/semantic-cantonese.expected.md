@@ -1,0 +1,13 @@
+- dialog "澳電智能客服語音通話":
+  - text: 語音通話中 {{clock}}
+  - img
+  - heading "澳電智能客服" [level=2]
+  - status: 客服正在回答…
+  - text: 你
+  - paragraph: 我已經試過網上繳費，都係交唔到。
+  - text: 客服
+  - paragraph: 可以先確認付款有冇成功扣款，再聯絡銀行查詢失敗原因。
+  - paragraph: 開場白播放完成後即可提問，客服回答時也可以直接說話打斷。
+  - button "掛斷語音通話":
+    - img
+  - text: 掛斷 通話內容會保留在本次會話中

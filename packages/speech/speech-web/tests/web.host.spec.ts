@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { Context } from '@deepseek-ai/cordis'
-import { createAssistantMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createAssistantMessage } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -68,6 +68,7 @@ async function harness(options: {
     roots: () => [live],
   } as never)
   await ctx.plugin(SystemPrompt)
+  if (options.config?.call?.interruption.semantic !== undefined) await ctx.plugin(LlmRuntime)
   if (options.transcription === true) await ctx.plugin(SpeechTranscriptionRuntime)
   if (options.synthesis === true) await ctx.plugin(SpeechSynthesisRuntime)
   const spoken: string[] = []
@@ -143,6 +144,17 @@ describe('speech Web Consumer', () => {
       greetings: { yue: { text: '你好。', url: '/api/speech/greeting?language=yue&sessionId=voice-session' } },
     } })
     expect(advertised).not.toHaveProperty('call.responseInstructions')
+    const semantic = { provider: 'private-route', model: 'private-model', timeoutMs: 1000, maxInputChars: 6000, maxOutputTokens: 32, maxConcurrent: 4 }
+    const classified = await harness({
+      transcription: true, synthesis: true,
+      realtime: async () => ({ send: async () => {}, close: async () => {} }),
+      config: { call: { ...call, interruption: { ...call.interruption, semantic } } },
+    })
+    const semanticProfile: unknown = await (await classified.routes.get(SPEECH_PROFILE_PATH)!.handler(profileRequest())).json()
+    expect(semanticProfile).toMatchObject({ call: { interruption: { semantic: { timeoutMs: 1000 } } } })
+    expect(JSON.stringify(semanticProfile)).not.toContain('private-route')
+    expect(JSON.stringify(semanticProfile)).not.toContain('private-model')
+    expect(semanticProfile).not.toHaveProperty('call.interruption.semantic.maxConcurrent')
     for (const route of enabled.routes.values()) expect(route.options.authority).toBe('trusted-host')
     const oneSided = await harness({ transcription: true, config: { call } })
     const partial = await oneSided.routes.get(SPEECH_PROFILE_PATH)!.handler(profileRequest())

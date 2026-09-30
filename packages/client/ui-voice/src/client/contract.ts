@@ -61,6 +61,8 @@ export interface SpeechCallOptions {
   readonly utteranceMergeMs: number
   /** Multi-signal intent screening applied while an assistant answer is active. */
   readonly interruption: {
+    /** Optional Host semantic classification deadline; absent uses local screening only. */
+    readonly semantic?: { readonly timeoutMs: number }
     /** Sustained partial-transcript time required before it can stop playback. */
     readonly confirmationMs: number
     /** Minimum normalized letters or numbers for directed final requests and exact playback echo. */
@@ -106,6 +108,19 @@ export interface VoiceSentence {
 
 /** Same-origin browser transport owned by this UI package. */
 export interface VoiceClient {
+  /**
+   * Classify a completed overlapping utterance without changing the customer conversation.
+   * @param request - Caller text, preceding question, and actually audible reply context.
+   * @param signal - Candidate lifetime, including its classification deadline.
+   * @returns Whether the caller is asking to take the conversational turn.
+   */
+  classifyInterruption?(request: {
+    readonly sessionId: SessionId
+    readonly text: string
+    readonly question: string
+    readonly playback: string
+  }, signal: AbortSignal): Promise<{ readonly decision: 'interrupt' | 'continue' }>
+
   /**
    * Prepare a streaming sentence source.
    * @param request - logged text prefix and coordinates.

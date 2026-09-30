@@ -92,7 +92,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }[T]
 ```
 
-来源：[`packages/core/session/src/types.ts:336`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:343`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:372`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:404`](../packages/core/session/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:336`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:343`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:372`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:404`](../packages/core/session/src/types.ts)
 
 ## 事件
 
@@ -391,14 +391,34 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 来源：[`packages/compaction/compaction/src/types.ts:33`](../packages/compaction/compaction/src/types.ts)
 
+### `customer-service/*`
+
+<a id="customer-servicequality-request--log-only"></a>
+
+#### `customer-service/quality-request` — log-only
+
+```ts persistence-catalog
+/** Exact auxiliary quality request in a detached audit session, never the customer's session. */
+'customer-service/quality-request': {
+  provider: string
+  model: string
+  system: string
+  messages: Message[]
+  maxTokens: number
+  reasoningEffort: 'off'
+}
+```
+
+来源：[`packages/host/customer-service-admin/src/quality-engine.ts:21`](../packages/host/customer-service-admin/src/quality-engine.ts)
+
 ### `customer-service-knowledge/*`
 
 <a id="customer-service-knowledgeretrieval--log-only"></a>
 
-#### `customer-service-knowledge/retrieval` — 仅日志
+#### `customer-service-knowledge/retrieval` — log-only
 
 ```ts persistence-catalog
-/** 模型请求前完成的一次自动公司知识查询。 */
+/** One completed automatic company-knowledge lookup before a model request. */
 'customer-service-knowledge/retrieval': CustomerServiceKnowledgeRetrievalEvent
 ```
 
@@ -585,7 +605,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'response-language/preference': { value: ResponseLanguagePreference }
 ```
 
-来源：[`packages/context/response-language/src/index.ts:73`](../packages/context/response-language/src/index.ts)
+来源：[`packages/context/response-language/src/index.ts:86`](../packages/context/response-language/src/index.ts)
 
 <a id="response-languageresolved--log-only"></a>
 
@@ -596,7 +616,18 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'response-language/resolved': ResponseLanguageResolvedEvent
 ```
 
-来源：[`packages/context/response-language/src/index.ts:75`](../packages/context/response-language/src/index.ts)
+来源：[`packages/context/response-language/src/index.ts:88`](../packages/context/response-language/src/index.ts)
+
+<a id="response-languageretry--log-only"></a>
+
+#### `response-language/retry` — log-only
+
+```ts persistence-catalog
+/** One local output-language correction retry, at most once per step. */
+'response-language/retry': ResponseLanguageRetryEvent
+```
+
+来源：[`packages/context/response-language/src/index.ts:90`](../packages/context/response-language/src/index.ts)
 
 ### `sandbox/*`
 
@@ -701,6 +732,19 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 类型：[SessionTitleLlmRequestEventData](subsystems/session-title.md)
 
 来源：[`packages/session/session-title-llm/src/index.ts:43`](../packages/session/session-title-llm/src/index.ts)
+
+### `speech/*`
+
+<a id="speechinterruption-request--log-only"></a>
+
+#### `speech/interruption-request` — log-only
+
+```ts persistence-catalog
+/** Log-only auxiliary request; never projected into the customer's conversation. */
+'speech/interruption-request': InterruptionRequestEvent
+```
+
+来源：[`packages/speech/speech-web/src/interruption.ts:45`](../packages/speech/speech-web/src/interruption.ts)
 
 ### `step/*`
 

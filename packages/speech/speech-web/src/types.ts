@@ -54,6 +54,11 @@ export interface SpeechCallOptions {
   readonly utteranceMergeMs: number
   /** Multi-signal intent screening applied while an assistant answer is active. */
   readonly interruption: {
+    /** Optional asynchronous Host intent classification; provider details remain private. */
+    readonly semantic?: {
+      /** Host classification deadline, excluding browser transport. */
+      readonly timeoutMs: number
+    }
     /** Sustained partial-transcript time required before it can stop playback. */
     readonly confirmationMs: number
     /** Minimum normalized letters or numbers for directed final requests and exact playback echo. */

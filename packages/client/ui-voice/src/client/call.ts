@@ -180,6 +180,8 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
     const lifetime = new AbortController()
     const combined = AbortSignal.any([signal, lifetime.signal])
     let replyAbort: AbortController | undefined
+    let replySerial = 0
+    let audibleSentences: string[] = []
     let pending: string[] = []
     let worker: Promise<void> | undefined
     let upload = Promise.resolve()
@@ -196,7 +198,15 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
       confirmed: boolean
       hypothesis: string
       answer: string
+      question: string
+      reply: number
+      prefix: string
+      finalText: string
+      finalAt: number | undefined
+      nextSegmentAt: number | undefined
+      semanticAbort: AbortController | undefined
     } | undefined
+    const semanticTasks = new Set<Promise<void>>()
     let muted = false
     let awaitSpeechStart = false
     let synthesisProfile = synthesis.profile
@@ -230,6 +240,7 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
     const resetInterruption = (): void => {
       clearTimeout(interruptionTimer)
       interruptionTimer = undefined
+      interruption?.semanticAbort?.abort()
       interruption = undefined
     }
     this.controls = {
@@ -256,6 +267,8 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
           const text = appendUtteranceSegment(continuation, pending.splice(0).join('\n'))
           continuation = ''
           activeQuestion = text
+          replySerial++
+          audibleSentences = []
           replyAbort = new AbortController()
           this.transcript.beginReply()
           const replySignal = AbortSignal.any([combined, replyAbort.signal])
@@ -263,8 +276,9 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
           let playbackFailure: Error | undefined
           const sentences = new VoiceSentenceQueue(
             this.session.sessionId, synthesisProfile, call.fallbackSynthesisProfile, call, this.client, this.platform,
-            replySignal, () => {
+            replySignal, (spoken) => {
               if (replySignal.aborted) return
+              audibleSentences = [...audibleSentences.slice(-1), spoken]
               this.publish({ ...this.view, phase: 'playing' })
             }, (error) => {
               if (replySignal.aborted) return
@@ -298,7 +312,7 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
           } finally {
             await sentences.close()
             await cancelOwned()
-            if (interruption?.required && !interruption.confirmed) interruption.answer = this.view.answer
+            if (interruption?.required && !interruption.confirmed) interruption.answer = audibleSentences.join(' ')
             replyAbort = undefined
           }
           if (signal.aborted || lifetime.signal.aborted) break
@@ -306,7 +320,7 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
         }
       })().catch(fail).finally(() => { worker = undefined; if (pending.length > 0 && !combined.aborted) drain() })
     }
-    const scheduleUtterance = (): void => {
+    const scheduleUtterance = (delayMs = call.utteranceMergeMs): void => {
       clearTimeout(utteranceTimer)
       utteranceTimer = undefined
       if (utterance === '') return
@@ -318,26 +332,62 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
         this.transcript.finishUtterance(true)
         pending.push(complete)
         drain()
-      }, call.utteranceMergeMs)
+      }, delayMs)
     }
-    const beginInterruptionCandidate = () => {
+    const beginInterruptionCandidate = (segmentStartedAt?: number) => {
+      const previous = interruption
+      const retain = segmentStartedAt !== undefined && previous !== undefined && !previous.confirmed
+        && previous.reply === replySerial && previous.finalAt !== undefined
+        && segmentStartedAt - previous.finalAt < call.utteranceMergeMs
       resetInterruption()
       interruption = {
         startedAt: undefined,
-        required: replyAbort !== undefined && !replyAbort.signal.aborted,
+        required: (retain && previous.required) || (replyAbort !== undefined && !replyAbort.signal.aborted),
         confirmed: false,
         hypothesis: '',
-        answer: this.view.answer,
+        answer: retain ? previous.answer : audibleSentences.join(' '),
+        question: retain ? previous.question : activeQuestion,
+        reply: replySerial,
+        prefix: retain ? previous.finalText : '',
+        finalText: '',
+        finalAt: undefined,
+        nextSegmentAt: undefined,
+        semanticAbort: undefined,
       }
       return interruption
     }
-    const confirmInterruption = (text: string, final: boolean): 'accepted' | 'ignored' | 'waiting' => {
-      const candidate = interruption ?? beginInterruptionCandidate()
+    const acceptFinal = (text: string, delayMs = call.utteranceMergeMs): void => {
+      interrupt()
+      if (isStandaloneStopRequest(text)) {
+        clearTimeout(utteranceTimer)
+        utteranceTimer = undefined
+        utterance = ''
+        pending = []
+        this.transcript.discardUtterance()
+        this.publish({ ...this.view, phase: 'listening', transcript: '' })
+        return
+      }
+      utterance = appendUtteranceSegment(utterance, text)
+      this.transcript.recognize(utterance)
+      this.publish({ ...this.view, phase: 'transcribing', transcript: utterance })
+      scheduleUtterance(delayMs)
+    }
+    const confirmInterruption = (segment: string, final: boolean): 'accepted' | 'ignored' | 'waiting' => {
+      const candidate = interruption?.nextSegmentAt === undefined
+        ? interruption ?? beginInterruptionCandidate()
+        : beginInterruptionCandidate(interruption.nextSegmentAt)
+      const text = appendUtteranceSegment(candidate.prefix, segment)
       if (replyAbort !== undefined && !replyAbort.signal.aborted) {
         candidate.required = true
-        candidate.answer = this.view.answer
+        candidate.answer = audibleSentences.join(' ')
       }
       if (!candidate.required || candidate.confirmed) return 'accepted'
+      candidate.semanticAbort?.abort()
+      candidate.semanticAbort = undefined
+      if (final) {
+        candidate.finalText = text
+        candidate.finalAt = Date.now()
+      }
       candidate.startedAt ??= Date.now()
       const startedAt = candidate.startedAt
       candidate.hypothesis = text
@@ -354,6 +404,35 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
         interrupt()
         return 'accepted'
       }
+      if (decision === 'classify') {
+        clearTimeout(interruptionTimer)
+        interruptionTimer = undefined
+        const classify = this.client.classifyInterruption?.bind(this.client)
+        const semantic = call.interruption.semantic
+        if (!classify || !semantic) return 'ignored'
+        const abort = new AbortController()
+        candidate.semanticAbort = abort
+        const timeout = setTimeout(() => { abort.abort() }, semantic.timeoutMs)
+        const classificationSignal = AbortSignal.any([combined, abort.signal])
+        // The recognizer remains synchronous; only a current reply/candidate can accept a late verdict.
+        const task = (async () => {
+          try {
+            const result = await classify({ sessionId: this.session.sessionId, text,
+              question: candidate.question, playback: candidate.answer }, classificationSignal)
+            if (classificationSignal.aborted || interruption !== candidate || muted
+              || replySerial !== candidate.reply || result.decision !== 'interrupt') return
+            candidate.confirmed = true
+            const remaining = Math.max(0, call.utteranceMergeMs - (Date.now() - (candidate.finalAt ?? Date.now())))
+            resetInterruption()
+            acceptFinal(text, remaining)
+          } catch {
+            // Classification transport, deadline, and provider failures never cancel the spoken answer.
+          } finally { clearTimeout(timeout) }
+        })()
+        semanticTasks.add(task)
+        void task.finally(() => { semanticTasks.delete(task) })
+        return 'waiting'
+      }
       if (decision === 'ignore') {
         clearTimeout(interruptionTimer)
         interruptionTimer = undefined
@@ -364,7 +443,7 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
         interruptionTimer = setTimeout(() => {
           interruptionTimer = undefined
           if (interruption !== candidate || candidate.confirmed || candidate.hypothesis === '') return
-          if (replyAbort !== undefined && !replyAbort.signal.aborted) candidate.answer = this.view.answer
+          if (replyAbort !== undefined && !replyAbort.signal.aborted) candidate.answer = audibleSentences.join(' ')
           const delayed = classifyInterruption({
             text: candidate.hypothesis,
             answer: candidate.answer,
@@ -398,7 +477,8 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
           case 'speech-start':
             // An onset without recognized words cannot erase an answer or strand a finalized draft.
             scheduleUtterance()
-            beginInterruptionCandidate()
+            if (interruption?.finalAt !== undefined) interruption.nextSegmentAt = Date.now()
+            else beginInterruptionCandidate()
             break
           case 'partial': {
             if (event.text.trim() === '') break
@@ -413,24 +493,16 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
           }
           case 'final': {
             const text = event.text.trim()
-            if (text === '') { resetInterruption(); break }
-            const decision = confirmInterruption(text, true)
-            resetInterruption()
-            if (decision !== 'accepted') break
-            interrupt()
-            if (isStandaloneStopRequest(text)) {
-              clearTimeout(utteranceTimer)
-              utteranceTimer = undefined
-              utterance = ''
-              pending = []
-              this.transcript.discardUtterance()
-              this.publish({ ...this.view, phase: 'listening', transcript: '' })
+            if (text === '') {
+              if (interruption?.finalAt === undefined) resetInterruption()
+              else interruption.nextSegmentAt = undefined
               break
             }
-            utterance = appendUtteranceSegment(utterance, text)
-            this.transcript.recognize(utterance)
-            this.publish({ ...this.view, phase: 'transcribing', transcript: utterance })
-            scheduleUtterance()
+            const decision = confirmInterruption(text, true)
+            if (decision !== 'accepted') break
+            const complete = appendUtteranceSegment(interruption?.prefix ?? '', text)
+            resetInterruption()
+            acceptFinal(complete)
             break
           }
           case 'error': fail(new Error(event.message)); break
@@ -470,7 +542,7 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
       if (replyAbort !== undefined && !replyAbort.signal.aborted) this.transcript.interrupt()
       this.publish({ ...this.view })
       clearTimeout(utteranceTimer)
-      clearTimeout(interruptionTimer)
+      resetInterruption()
       queuedAudio = []
       pending = []
       replyAbort?.abort()
@@ -478,6 +550,7 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
       await worker
       await upload
       await downlink?.catch(() => { /* The call's terminal result already owns downlink failure. */ })
+      await Promise.all(semanticTasks)
     }
   }
 

@@ -1,0 +1,11 @@
+- dialog "澳電智能客服語音通話":
+  - text: 語音通話中 {{clock}}
+  - img
+  - heading "澳電智能客服" [level=2]
+  - status: 客服正在回答…
+  - text: 客服
+  - paragraph: 你好，我係澳電智能客服，請問有咩可以幫到你？
+  - paragraph: 開場白播放完成後即可提問，客服回答時也可以直接說話打斷。
+  - button "掛斷語音通話":
+    - img
+  - text: 掛斷 通話內容會保留在本次會話中

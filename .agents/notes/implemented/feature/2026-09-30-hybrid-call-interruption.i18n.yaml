@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-30-hybrid-call-interruption.md
+2026-09-30-hybrid-call-interruption.md: 662e792f8b12d4904c002d8435cc695533c82456
+2026-09-30-hybrid-call-interruption.zh.md: 3d53a5be8670828c478bd5de6e331c6f344d585b

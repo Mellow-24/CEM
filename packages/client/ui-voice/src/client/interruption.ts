@@ -3,12 +3,16 @@
 import type { SpeechCallOptions } from './contract.ts'
 
 /** Result for the latest ASR hypothesis while an assistant answer is active. */
-export type InterruptionDecision = 'wait' | 'interrupt' | 'ignore'
+export type InterruptionDecision = 'wait' | 'interrupt' | 'ignore' | 'classify'
 
 const BACKCHANNEL = new RegExp(`^(?:${[
   '[嗯唔哦噢喔啊呀诶欸]', '嗯嗯', '唔唔', '哦哦', '好(?:的|呀|啊)?', '係', '系', '是(?:的)?', '對', '对',
   '明白', '知道(?:了|啦)?', '收到', '可以', '行', 'ok(?:ay)?', 'yes', 'yeah', 'right', 'sim', 'certo', 'entendi',
 ].join('|')})[.!?。！？~～]*$`, 'iu')
+const ACKNOWLEDGEMENT = new RegExp(`^(?:${[
+  /(?:嗯|唔|哦|好(?:的|啦|呀|啊)?|係呀|系呀|明白(?:了|啦)?|知道(?:了|啦)?|收到|多謝|唔該|謝謝|谢谢|我知道|我明白)[\s，,。.!！?？]*/u.source,
+  /(?:ok(?:ay)?|yes|yeah|right|thanks|thank (?:you|u)(?: very much)?|bye(?: bye)?)[\s,.;!?]*/u.source,
+].join('|')})+$`, 'iu')
 const POLITE_PREFIX = new RegExp(`^(?:${[
   /(?:嗯|哦|好(?:的|啦)?|唔該|唔该|麻煩你?|麻烦你?|請你?|请你?|客服|澳電客服|澳电客服)[\s，,。.!！]*/u.source,
   /(?:你)?(?:可唔可以|可不可以|能不能)[\s，,]*/u.source,
@@ -37,6 +41,7 @@ const DIRECTED_REQUESTS = [
  * @returns Whether the complete utterance contains only a stop request.
  */
 export function isStandaloneStopRequest(text: string): boolean {
+  if (isSingleCharacterUtterance(text)) return false
   const clean = text.trim().replace(POLITE_PREFIX, '').replace(/[.!?。！？~～]+$/u, '').trim()
   return STOP_REQUESTS.some(pattern => pattern.test(clean))
 }
@@ -53,6 +58,16 @@ function stopRequest(text: string, final: boolean): boolean {
 
 function normalized(text: string): string {
   return text.normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+}
+
+/**
+ * Detect one spoken character after optional polite prefixes; English words retain their letters.
+ * @param text - Recognized caller text.
+ * @returns Whether exactly one Unicode letter or number remains after removing optional prefixes and punctuation.
+ */
+export function isSingleCharacterUtterance(text: string): boolean {
+  const request = text.trim().replace(POLITE_PREFIX, '')
+  return Array.from(normalized(request || text)).length === 1
 }
 
 function bigrams(text: string): Set<string> {
@@ -82,12 +97,14 @@ function resemblesPlayback(text: string, answer: string, options: SpeechCallOpti
 
 /**
  * Classify whether recognized speech claims the conversational turn.
- * Only explicit stop commands or completed assistant-directed corrections and requests
- * can interrupt. Transcript length and a question mark alone never claim the turn.
- * Echo screening also applies to transcripts containing interruption commands.
+ * Stop commands use a local fast path. With semantic classification enabled, other
+ * completed substantive speech requires the Host verdict regardless of minimumMeaningfulCharacters;
+ * otherwise directed rules apply.
+ * Isolated characters and passive acknowledgements never claim a turn. Playback-like speech
+ * requires a semantic verdict when configured and is otherwise ignored.
  * @param input - Latest cumulative recognizer hypothesis and active answer context.
  * @param options - Host-selected timing and language-independent thresholds.
- * @returns Whether to keep listening, interrupt the answer, or discard a non-turn utterance.
+ * @returns Whether to keep listening, interrupt, request semantic classification, or discard the utterance.
  */
 export function classifyInterruption(input: {
   readonly text: string
@@ -98,8 +115,12 @@ export function classifyInterruption(input: {
   const text = input.text.trim()
   const semantic = normalized(text)
   if (semantic === '') return input.final ? 'ignore' : 'wait'
+  if (isSingleCharacterUtterance(text)) return input.final ? 'ignore' : 'wait'
+  if (ACKNOWLEDGEMENT.test(text)) return input.final ? 'ignore' : 'wait'
 
-  if (resemblesPlayback(text, input.answer, options)) return input.final ? 'ignore' : 'wait'
+  if (resemblesPlayback(text, input.answer, options)) {
+    return input.final ? options.semantic === undefined ? 'ignore' : 'classify' : 'wait'
+  }
   if (semantic.length <= options.backchannelMaximumCharacters && BACKCHANNEL.test(text)) {
     return input.final ? 'ignore' : 'wait'
   }
@@ -107,9 +128,11 @@ export function classifyInterruption(input: {
   const request = text.replace(POLITE_PREFIX, '')
   const stop = stopRequest(request, input.final)
   if (input.final) {
+    if (stop) return 'interrupt'
+    if (options.semantic !== undefined) return 'classify'
     const directed = semantic.length >= options.minimumMeaningfulCharacters
       && DIRECTED_REQUESTS.some(pattern => pattern.test(text) || pattern.test(request))
-    return stop || directed ? 'interrupt' : 'ignore'
+    return directed ? 'interrupt' : 'ignore'
   }
   return stop && input.elapsedMs >= options.confirmationMs ? 'interrupt' : 'wait'
 }

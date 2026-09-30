@@ -150,6 +150,9 @@ function parseCall(value: unknown): NonNullable<SpeechProfile['call']> {
     maxPendingAudioMs: pendingAudioMs(call['maxPendingAudioMs']),
     utteranceMergeMs: nonNegativeInteger(call['utteranceMergeMs'], 'call.utteranceMergeMs'),
     interruption: {
+      ...(interruption['semantic'] === undefined ? {} : { semantic: {
+        timeoutMs: positiveInteger(record(interruption['semantic'], 'interruption.semantic')['timeoutMs'], 'interruption.semantic.timeoutMs'),
+      } }),
       confirmationMs: positiveInteger(interruption['confirmationMs'], 'call.interruption.confirmationMs'),
       minimumMeaningfulCharacters: positiveInteger(interruption['minimumMeaningfulCharacters'], 'call.interruption.minimumMeaningfulCharacters'),
       echoMinimumCharacters: positiveInteger(interruption['echoMinimumCharacters'], 'call.interruption.echoMinimumCharacters'),
@@ -173,6 +176,17 @@ function parseCall(value: unknown): NonNullable<SpeechProfile['call']> {
  */
 export function createWebVoiceClient(fetcher: Fetch = globalThis.fetch.bind(globalThis)): VoiceClient {
   return {
+    async classifyInterruption(request, signal) {
+      const response = await fetcher('/api/speech/interruption', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(request), signal,
+      })
+      if (!response.ok) throw new Error(`speech interruption request failed: HTTP ${String(response.status)}`)
+      const body = record(await response.json(), 'speech interruption response')
+      if (body['decision'] !== 'interrupt' && body['decision'] !== 'continue') {
+        throw new Error('Invalid speech interruption decision')
+      }
+      return { decision: body['decision'] }
+    },
     async synthesizeSentence(request, signal) {
       const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(request.prefix))
       signal.throwIfAborted()

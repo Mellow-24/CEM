@@ -10,6 +10,49 @@ const options = {
 }
 
 describe('call interruption intent screening', () => {
+  it.each(['停', '好。', '嗯', '啊', '？停！', 'A', '１', '嗯，停', '唔該，停', '嗯\n停', 'Please A'])(
+    'never accepts an isolated character: %s', (text) => {
+      for (const config of [options, { ...options, semantic: { timeoutMs: 1000 } }]) {
+        expect(classifyInterruption({ text, answer: '', final: true, elapsedMs: 2000 }, config)).toBe('ignore')
+        expect(classifyInterruption({ text, answer: '', final: false, elapsedMs: 2000 }, config)).toBe('wait')
+        expect(isStandaloneStopRequest(text)).toBe(false)
+      }
+    },
+  )
+
+  it.each(['我已經試過網上繳費，都係交唔到。', 'What if I do not have an account?', '唔係，我想問繳費方式',
+    '你幫我關一下門。', '好的，但是我已經交過錢。'])('requires a Host verdict for complete natural speech: %s', (text) => {
+    const config = { ...options, semantic: { timeoutMs: 1000 } }
+    expect(classifyInterruption({ text, answer: '', final: false, elapsedMs: 2000 }, config)).toBe('wait')
+    expect(classifyInterruption({ text, answer: '', final: true, elapsedMs: 2000 }, config)).toBe('classify')
+  })
+
+  it.each(['點解？', '邊度？'])('classifies a completed two-character Cantonese follow-up: %s', (text) => {
+    const input = { text, answer: '你可以透過網上服務查詢帳單。', elapsedMs: 2000 }
+    const config = { ...options, semantic: { timeoutMs: 1000 } }
+    expect(classifyInterruption({ ...input, final: false }, config)).toBe('wait')
+    expect(classifyInterruption({ ...input, final: true }, config)).toBe('classify')
+    expect(classifyInterruption({ ...input, final: true }, options)).toBe('ignore')
+  })
+
+  it('applies the configured meaningful-length threshold only to non-semantic directed requests', () => {
+    const input = { text: '講慢啲', answer: '', elapsedMs: 2000, final: true }
+    const config = { ...options, minimumMeaningfulCharacters: 4 }
+    expect(classifyInterruption(input, config)).toBe('ignore')
+    expect(classifyInterruption(input, { ...config, semantic: { timeoutMs: 1000 } })).toBe('classify')
+  })
+
+  it.each(['好的', '好啦', '係呀係呀', '嗯我知道', 'thank you very much', 'yes yes', 'bye bye'])('filters passive speech before model classification: %s', (text) => {
+    expect(classifyInterruption({ text, answer: '', final: true, elapsedMs: 2000 }, {
+      ...options, semantic: { timeoutMs: 1000 },
+    })).toBe('ignore')
+  })
+
+  it('passes text similar to audible speech to semantic judgement instead of treating it as proven echo', () => {
+    expect(classifyInterruption({ text: '停一下', answer: '你可以先停一下再操作。', final: true, elapsedMs: 2000 }, {
+      ...options, semantic: { timeoutMs: 1000 },
+    })).toBe('classify')
+  })
   it('separates stop-only controls from a stop followed by another question', () => {
     expect(isStandaloneStopRequest('唔該，停一下。')).toBe(true)
     expect(isStandaloneStopRequest('Please stop speaking.')).toBe(true)

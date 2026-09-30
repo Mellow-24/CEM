@@ -1,5 +1,7 @@
 /** CEM browser media and Session admission with replayed external ASR, TTS, and model services. */
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,13 +19,44 @@ it.skipIf(webSnapshotMode() === 'record')('records a reviewed draft and preserve
   await new Promise<void>((resolve) => { server.once('listening', resolve) })
   const address = server.address()
   if (address === null || typeof address === 'string') throw new Error('Missing fixture address')
+  const corpus = join(dir, 'knowledge')
+  const knowledgeText = '# 電費查詢\n\n可以查閱每月賬單及繳費資料。\n'
+  await mkdir(corpus)
+  await writeFile(join(corpus, 'payment.md'), knowledgeText)
+  await writeFile(join(corpus, 'source-manifest.json'), JSON.stringify({ version: 1, sources: [{
+    path: 'payment.md', sha256: createHash('sha256').update(knowledgeText).digest('hex'),
+  }] }))
+  const retrieval = createServer((request, response) => {
+    const chunks: Buffer[] = []
+    request.on('data', (chunk: Buffer) => chunks.push(chunk))
+    request.on('end', () => {
+      expect(['/embeddings', '/rerank']).toContain(request.url)
+      expect(request.headers.authorization).toBe('Bearer fixture')
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { input?: string[]; documents?: string[] }
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end(JSON.stringify(request.url === '/embeddings'
+        ? { data: body.input!.map(() => ({ embedding: [1, 0] })) }
+        : { results: body.documents!.map((_, index) => ({ index, relevance_score: 1 })) }))
+    })
+  })
+  await new Promise<void>((resolve) => { retrieval.listen(0, '127.0.0.1', resolve) })
+  const retrievalAddress = retrieval.address()
+  if (retrievalAddress === null || typeof retrievalAddress === 'string') throw new Error('Missing retrieval fixture address')
+  const knowledgeEnvironment = {
+    DSH_MACAU_KNOWLEDGE_DIR: corpus,
+    DSH_MACAU_KNOWLEDGE_MANIFEST: join(corpus, 'source-manifest.json'),
+    DSH_MACAU_KNOWLEDGE_INDEX: join(dir, 'knowledge-index.json'),
+    DSH_MACAU_EMBEDDING_BASE_URL: `http://127.0.0.1:${retrievalAddress.port}`,
+    DSH_MACAU_RERANKER_URL: `http://127.0.0.1:${retrievalAddress.port}/rerank`,
+  }
   const previous = {
     DASHSCOPE_API_KEY: process.env.DASHSCOPE_API_KEY,
     DSH_MACAU_ASR_REALTIME_URL: process.env.DSH_MACAU_ASR_REALTIME_URL,
     DSH_MACAU_TTS_REALTIME_URL: process.env.DSH_MACAU_TTS_REALTIME_URL,
     MACAU_MINISTREAM_TTS_TOKEN: process.env.MACAU_MINISTREAM_TTS_TOKEN,
+    ...Object.fromEntries(Object.keys(knowledgeEnvironment).map(key => [key, process.env[key]])),
   }
-  Object.assign(process.env, { DASHSCOPE_API_KEY: 'fixture', DSH_MACAU_ASR_REALTIME_URL: `ws://127.0.0.1:${address.port}`, DSH_MACAU_TTS_REALTIME_URL: `ws://127.0.0.1:${address.port}/ministream-ws/tts/{client_id}`, MACAU_MINISTREAM_TTS_TOKEN: 'fixture' })
+  Object.assign(process.env, { ...knowledgeEnvironment, DASHSCOPE_API_KEY: 'fixture', DSH_MACAU_ASR_REALTIME_URL: `ws://127.0.0.1:${address.port}`, DSH_MACAU_TTS_REALTIME_URL: `ws://127.0.0.1:${address.port}/ministream-ws/tts/{client_id}`, MACAU_MINISTREAM_TTS_TOKEN: 'fixture' })
   let socket: WebSocket | undefined
   let frames = 0
   let synthesized = 0
@@ -47,7 +80,7 @@ it.skipIf(webSnapshotMode() === 'record')('records a reviewed draft and preserve
     }
   })
   const reply = '好的，我哋可以繼續了解電費查詢方式。'
-  const question = '我想繼續了解查詢方式。\n尤其是上個月的。'
+  const question = '我想繼續瞭解查詢方式。\n尤其是上個月的。'
   const longReply = [
     '以下是測試用的詳細說明，並非真實帳單資料。',
     '先準備電費單並核對客戶編號，再確認查詢月份與地址，留意帳單列出的用電期間和繳費期限。',
@@ -116,7 +149,7 @@ it.skipIf(webSnapshotMode() === 'record')('records a reviewed draft and preserve
     await page.getByRole('button', { name: /正在聆聽.*\d{2}:\d{2}/ }).click()
     socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
     socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: '我想繼續了解查詢方式。' }))
-    await dialog.getByText('我想繼續了解查詢方式。', { exact: true }).waitFor()
+    await dialog.getByText('我想繼續瞭解查詢方式。', { exact: true }).waitFor()
     // A conversational pause must fit within the shipped continuation window.
     await new Promise(resolve => setTimeout(resolve, 350))
     socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
@@ -140,10 +173,12 @@ it.skipIf(webSnapshotMode() === 'record')('records a reviewed draft and preserve
     await compareOrRefreshGolden(fileURLToPath(new URL('./snapshots/mobile-chat/call.expected.md', import.meta.url)), aria, webSnapshotMode())
     await page.screenshot({ path: '/tmp/cem-mobile-call.png', animations: 'disabled' })
     expect(await dialog.getByText(reply, { exact: true }).count()).toBe(1)
+    // This separate instruction starts after the 850 ms ASR continuation window.
+    await new Promise(resolve => setTimeout(resolve, 900))
     await page.evaluate(() => { Reflect.set(window, '__cemHoldReply', false) })
     socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
-    socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: '請提供詳細說明。', stash: '' }))
-    socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: '請提供詳細說明。' }))
+    socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: '等一下，請講清楚啲。', stash: '' }))
+    socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: '等一下，請講清楚啲。' }))
     await dialog.getByText(longReply, { exact: true }).waitFor({ timeout: 45000 })
     await expect.poll(() => page.evaluate(() => (Reflect.get(window, '__cemAudibleSources') as Set<string>).size), { timeout: 15000 }).toBeGreaterThanOrEqual(4)
     expect(await page.evaluate(() => new Set(Reflect.get(window, '__cemAudible') as HTMLMediaElement[]).size)).toBe(1)
@@ -152,7 +187,7 @@ it.skipIf(webSnapshotMode() === 'record')('records a reviewed draft and preserve
     const userTexts = scaffold.ctx.agents.roots().flatMap(agent => agent.session.events)
       .flatMap(event => event.type === 'user/message' && event.data.source.kind === 'user'
         ? [event.data.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')] : [])
-    expect(userTexts).toEqual([question, `${question}\n請提供詳細說明。`])
+    expect(userTexts).toEqual([question, `${question}\n等一下，請講清楚啲。`])
     const log = dialog.getByRole('log', { name: '通話對話' })
     await log.dispatchEvent('wheel', { deltaY: -100 })
     await log.evaluate((element) => { element.scrollTop = 0 })
@@ -236,6 +271,7 @@ it.skipIf(webSnapshotMode() === 'record')('records a reviewed draft and preserve
     try { await scaffold.close() } finally {
       for (const client of server.clients) client.terminate()
       await new Promise<void>((resolve) => { server.close(() => { resolve() }) })
+      await new Promise<void>((resolve) => { retrieval.close(() => { resolve() }) })
       for (const [key, value] of Object.entries(previous)) {
         if (value === undefined) Reflect.deleteProperty(process.env, key)
         else process.env[key] = value

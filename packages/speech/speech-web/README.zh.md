@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-通过注册到 `ctx.connection` 的精确、经过访问地址检查的 raw Fetch route 公开 Agent scope 语音 profile 的 Host Consumer。它既不把音频接受为模型内容，也不写入语音 event。
+通过注册到 `ctx.connection` 的精确、经过访问地址检查的 raw Fetch route 公开 Agent scope 语音 profile 的 Host Consumer。音频不进入模型内容；可选打断分类记录文本请求，但不生成对话消息。
 
 ## Routes
 
@@ -11,6 +11,7 @@
 | `GET /api/speech/profile?sessionId=&profile?=` | 为精确 live root Agent 独立解析公开转写和合成元数据。不可用能力不出现。 |
 | `POST /api/speech/transcribe?sessionId=&profile?=` | 接受一个带 `audio/*` Content-Type 的完整 raw audio body，并返回 `{ text, language? }`。它不提交文本。 |
 | `GET /api/speech/synthesize?sessionId=&messageId=&profile?=` | 校验 append-origin 已提交 `assistant/message`，仅提取非空文本 block，并返回其编码 TTS 流。 |
+| `POST /api/speech/interruption` | 配置语义打断时，为 live root Session 的重叠语句分类，返回 `interrupt` 或 `continue`；不取消播放或提交消息。 |
 
 所有 route 都使用 Connection 配置的访问地址信任检查，默认值为 `loopback`。转写 route 还向 Connection 注册 `maxTranscriptionBodyBytes`，因此 Node bridge 在缓冲之前拒绝超限 body；profile 元数据公布该传输上限与所选提供方 `maxBytes` 的较小值，handler 会再次强制同一有效值。默认传输上限为 16 MiB，且仍可配。
 
@@ -30,6 +31,20 @@
 
 ## Model Experience
 
+### 辅助打断分类
+
+#### What the model sees
+
+可选 `call.interruption.semantic` 指定 `provider`、`model`、`timeoutMs`、`maxInputChars`、`maxOutputTokens` 和 `maxConcurrent`。固定分类指令，以及 JSON 封装的近期用户问题、当前问题、实际播报文字和候选语句，在推理前记入 `speech/interruption-request`。该事件只记日志，旧读取器可忽略。客户端文字是数据，不是指令。浏览器只获得超时值。分类不改变 ASR、回答语言、检索或 TTS 配置。
+
+#### Token effect
+
+每条经过筛选的完整候选最多发起一个有上限的请求，关闭思考，不重试或检索。空文字及单字在推理前拒绝。每个 Session 只允许一个活动请求，并限制全局并发。一个替换候选可在自身截止时间内等待已取消的前驱，不并行推理。超时、取消、无效输出及容量不足返回 `continue`；提供方真正结束后才释放占用容量。
+
+#### KV Cache effect
+
+辅助请求使用固定系统指令和简短动态用户消息，不追加模型历史消息，也不改变对话模型缓存前缀。
+
 ### 实时通话回答要求
 
 #### What the model sees
@@ -46,5 +61,6 @@
 
 ## Known Limitations and Deferred Work
 
+- **仅文字的打断意图** — 分类无法确定说话人身份。提供方延迟会推迟自然插话的判断；失败时保守地继续播放，明确的本地停止命令仍然有效。
 - **仅 live 普通 Session** — profile 和媒体 route 不恢复 cold Session，且拒绝 delegated Agent；历史播放要做到透明，Web session resolver 需要共享 cold-resume API。
 - **已播报内容无法撤回** — 通话逐句合成，生成重试可能改写最终回答；取消只能停止后续音频。

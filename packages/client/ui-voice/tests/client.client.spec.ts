@@ -23,6 +23,14 @@ describe('speech profile wire validation', () => {
       ...call.interruption, echoSimilarityThreshold: 0.49,
     } } })).toThrow(/echoSimilarityThreshold/)
     expect(() => parseSpeechProfile({ call: { ...call, interruption: undefined } })).toThrow(/interruption/)
+    expect(parseSpeechProfile({ call: { ...call, interruption: {
+      ...call.interruption, semantic: { timeoutMs: 1000 },
+    } } }).call?.interruption.semantic).toEqual({ timeoutMs: 1000 })
+    for (const timeoutMs of [0, -1, NaN, '1000', undefined]) {
+      expect(() => parseSpeechProfile({ call: { ...call, interruption: {
+        ...call.interruption, semantic: { timeoutMs },
+      } } })).toThrow(/timeoutMs/)
+    }
     expect(() => parseSpeechProfile({ call: { ...call, sentencePauseMinChars: 161 } }))
       .toThrow(/sentencePauseMinChars/)
     for (const milliseconds of [1900, 2050, 60100, undefined]) {
@@ -58,6 +66,22 @@ describe('speech profile wire validation', () => {
 })
 
 describe('createWebVoiceClient', () => {
+  it('sends candidate context with its abort signal and validates the decision', async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ decision: 'continue', reason: 'acknowledgement' }))
+    const client = createWebVoiceClient(fetcher)
+    const signal = new AbortController().signal
+    const request = { sessionId: SID, text: '我已經交過錢', question: '點交電費', playback: '可以登入網上服務。' }
+    await expect(client.classifyInterruption!(request, signal)).resolves.toEqual({ decision: 'continue' })
+    expect(fetcher).toHaveBeenCalledWith('/api/speech/interruption', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(request), signal,
+    })
+    fetcher.mockResolvedValueOnce(Response.json({ decision: 'interrupt' }))
+    await expect(client.classifyInterruption!(request, signal)).resolves.toEqual({ decision: 'interrupt' })
+    fetcher.mockResolvedValueOnce(Response.json({ decision: true }))
+    await expect(client.classifyInterruption!(request, signal)).rejects.toThrow('Invalid speech interruption decision')
+    fetcher.mockResolvedValueOnce(new Response('down', { status: 503 }))
+    await expect(client.classifyInterruption!(request, signal)).rejects.toThrow('HTTP 503')
+  })
   it('folds a missing Host route to unavailable and validates a successful profile', async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response('missing', { status: 404 }))

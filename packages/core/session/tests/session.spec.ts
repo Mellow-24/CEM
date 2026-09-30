@@ -3,13 +3,22 @@ import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage, CallId, createMessage, createToolResultMessage, MessageId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import SessionStore, {
   adoptSessionEvent,
+  decodeStorageRecord,
+  packChunkRuns,
   SESSION_FORMAT_VERSION,
   Session,
   SessionEvent,
   SessionId,
   snapshotSessionEvent,
 } from '@deepseek-ai/dsh-session'
-import type { CreateSessionOptions, SessionEventType, SessionHeader, SessionSurface, TodoItem } from '@deepseek-ai/dsh-session'
+import type { CreateSessionOptions, SessionEventType, SessionHeader, SessionSurface, SurfaceIntent, TodoItem } from '@deepseek-ai/dsh-session'
+
+declare module '@deepseek-ai/dsh-session/types' {
+  interface SessionEventMap {
+    /** Informational event with no message projection. */
+    'test/diagnostic': { message: string }
+  }
+}
 
 describe('Session', () => {
   it('exposes one stable readonly surface view', () => {
@@ -80,6 +89,23 @@ describe('Session', () => {
     const turnEnd = replayed.events.findLast(event => event.type === 'turn/end')
     expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason)
       .toEqual({ kind: 'aborted', reason: { kind: 'user' } })
+  })
+
+  it('preserves an informational event marker through storage and restored replay', () => {
+    const session = Session.create(SessionId('ignorable-append'))
+    const event = session.append('test/diagnostic', { message: 'informational' }, { ignorable: true })
+    const required = session.append('test/diagnostic', { message: 'required' }, {})
+    const stored = packChunkRuns(session.events)
+      .flatMap(row => decodeStorageRecord(JSON.parse(JSON.stringify(row))))
+    const restored = Session.fromRestore(session.id, stored, structuredClone(session.header))
+
+    expectTypeOf<typeof session.append<'test/diagnostic'>>().parameter(2)
+      .toEqualTypeOf<{ ignorable?: true } | undefined>()
+    expectTypeOf<typeof session.append<'assistant/message'>>().parameter(2).toEqualTypeOf<SurfaceIntent>()
+    expect(event.ignorable).toBe(true)
+    expect(required).not.toHaveProperty('ignorable')
+    expect(restored.events.slice(0, session.seq)).toEqual(session.events)
+    expect(restored.deriveMessages()).toEqual([])
   })
 
   it('renders injected-context and user messages as plain user content', () => {

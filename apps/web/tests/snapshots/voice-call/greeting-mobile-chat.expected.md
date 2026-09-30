@@ -1,0 +1,14 @@
+- dialog "澳電語音通話":
+  - button "返回聊天"
+  - img "澳電 CEM"
+  - heading "澳電語音助手" [level=1]
+  - paragraph: 通話中 {{clock}}
+  - status: 澳電助手正在回答…
+  - log "通話對話":
+    - img "澳電 CEM"
+    - text: 澳電助手
+    - paragraph: 你好，我係澳電智能客服，請問有咩可以幫到你？
+  - button "靜音"
+  - button "結束通話"
+  - button "我要說話"
+  - paragraph: 完整對話會保留在聊天中

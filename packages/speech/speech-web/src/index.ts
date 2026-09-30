@@ -5,6 +5,8 @@ import type {} from '@deepseek-ai/dsh-response-language'
 import type { Context } from '@deepseek-ai/cordis'
 import { loggedSentence } from './sentence.ts'
 import { registerRealtimeRoutes } from './realtime.ts'
+import { registerInterruptionRoute } from './interruption.ts'
+import type { SpeechInterruptionConfig } from './interruption.ts'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -50,7 +52,12 @@ export interface Config {
   /** Explicitly permit configured trusted authorities; loopback remains the default. */
   authority?: 'loopback' | 'trusted-host'
   /** Enable continuous calls when streaming recognition and synthesis are available. */
-  call?: Omit<SpeechCallOptions, 'greetings' | 'fallbackSynthesisProfile'> & {
+  call?: Omit<SpeechCallOptions, 'greetings' | 'fallbackSynthesisProfile' | 'interruption'> & {
+    /** Browser screening plus optional Host-only semantic routing. */
+    interruption: Omit<SpeechCallOptions['interruption'], 'semantic'> & {
+      /** Optional model classification for natural interruptions; absence retains local rules only. */
+      semantic?: SpeechInterruptionConfig
+    }
     /** Model-visible response rules applied only while a realtime call is connected. */
     responseInstructions: string
     /** Preferred synthesis profile when more than one is visible to the Agent. */
@@ -92,6 +99,14 @@ export const Config: z<Config> = z.object({
       echoMinimumCharacters: z.number().step(1).min(2).max(64).required(),
       echoSimilarityThreshold: z.number().min(0.5).max(1).required(),
       backchannelMaximumCharacters: z.number().step(1).min(1).max(32).required(),
+      semantic: z.union([z.object({
+        provider: z.string().required(),
+        model: z.string().required(),
+        timeoutMs: z.number().step(1).min(100).max(5000).required(),
+        maxInputChars: z.number().step(1).min(2000).max(16000).required(),
+        maxOutputTokens: z.number().step(1).min(16).max(128).required(),
+        maxConcurrent: z.number().step(1).min(1).max(32).required(),
+      })]),
     }).required(),
     sentenceMaxChars: z.number().step(1).min(16).max(4000).required(),
     sentencePauseMinChars: z.number().step(1).min(1).max(4000).required(),
@@ -135,7 +150,16 @@ export function apply(ctx: Context, config: Config = {}): void {
     microphone: config.call.microphone,
     maxPendingAudioMs: config.call.maxPendingAudioMs,
     utteranceMergeMs: config.call.utteranceMergeMs,
-    interruption: config.call.interruption,
+    interruption: {
+      confirmationMs: config.call.interruption.confirmationMs,
+      minimumMeaningfulCharacters: config.call.interruption.minimumMeaningfulCharacters,
+      echoMinimumCharacters: config.call.interruption.echoMinimumCharacters,
+      echoSimilarityThreshold: config.call.interruption.echoSimilarityThreshold,
+      backchannelMaximumCharacters: config.call.interruption.backchannelMaximumCharacters,
+      ...(config.call.interruption.semantic === undefined ? {} : {
+        semantic: { timeoutMs: config.call.interruption.semantic.timeoutMs },
+      }),
+    },
     sentenceMaxChars: config.call.sentenceMaxChars,
     sentencePauseMinChars: config.call.sentencePauseMinChars,
     sentenceQueueLimit: config.call.sentenceQueueLimit,
@@ -167,6 +191,11 @@ export function apply(ctx: Context, config: Config = {}): void {
     }), { authority })
   }
   if (config.call !== undefined) {
+    if (config.call.interruption.semantic !== undefined) {
+      registerInterruptionRoute(ctx, authority, config.call.interruption.semantic,
+        sessionId => liveRootAgent(ctx, sessionId),
+        (request, route) => handle(ctx, request, route))
+    }
     registerRealtimeRoutes(
       ctx,
       authority,

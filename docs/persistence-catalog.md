@@ -731,6 +731,19 @@ Types: [SessionTitleLlmRequestEventData](subsystems/session-title.md)
 
 Source: [`packages/session/session-title-llm/src/index.ts:43`](../packages/session/session-title-llm/src/index.ts)
 
+### `speech/*`
+
+<a id="speechinterruption-request--log-only"></a>
+
+#### `speech/interruption-request` — log-only
+
+```ts persistence-catalog
+/** Log-only auxiliary request; never projected into the customer's conversation. */
+'speech/interruption-request': InterruptionRequestEvent
+```
+
+Source: [`packages/speech/speech-web/src/interruption.ts:45`](../packages/speech/speech-web/src/interruption.ts)
+
 ### `step/*`
 
 <a id="stepend--log-only"></a>

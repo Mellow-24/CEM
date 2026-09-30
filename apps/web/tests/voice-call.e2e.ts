@@ -9,6 +9,9 @@ import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import { chromium } from 'playwright'
 import { describe, expect, it } from 'vitest'
+import { loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
+import { LlmAdapter, ReasoningEffortId, type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { Config as SpeechWebConfig } from '@deepseek-ai/dsh-speech-web'
 import { launchWebScaffold, captureStableAria, compareOrRefreshGolden, webSnapshotMode } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage } from './support.ts'
 
@@ -19,6 +22,54 @@ const FIRST_PROMPT_SEGMENT = '我现在的自动转账'
 const SECOND_PROMPT_SEGMENT = '失败了怎么办？'
 const PROMPT = '我現在的自動轉賬\n失敗了怎麼辦？'
 const FIXTURE = fileURLToPath(new URL('./snapshots/voice-call/session.jsonl', import.meta.url))
+const STALE_QUESTION = '我想查另一張賬單。'
+const SEMANTIC_QUESTIONS = {
+  cantonese: { text: '我已經試過網上繳費，都係交唔到。', reply: '可以先確認付款有冇成功扣款，再聯絡銀行查詢失敗原因。' },
+  english: { text: "What if I don't have a bank account?", reply: 'You can pay your electricity bill at a customer service centre.' },
+} as const
+
+interface InterruptionFixtureRequest {
+  input: { utterance: string; question: string; playback: string; recentQuestions: string[] }
+  signal: AbortSignal
+  release(): void
+}
+
+/** Only the external classifier is scripted; the browser and Host route remain real. */
+class InterruptionFixtureAdapter extends LlmAdapter {
+  readonly requests: InterruptionFixtureRequest[] = []
+
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({
+      provider, id: model, name: model,
+      reasoning: { efforts: [{ id: ReasoningEffortId('off'), name: 'Off' }] },
+    })
+  }
+
+  override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    const content = options.messages.at(-1)?.content.find(block => block.type === 'text')
+    if (content?.type !== 'text' || options.signal === undefined) throw new Error('Interruption fixture requires text and cancellation')
+    const input = JSON.parse(content.text) as InterruptionFixtureRequest['input']
+    const signal = options.signal
+    let release!: () => void
+    let abort!: () => void
+    const pending = new Promise<void>((resolve, reject) => {
+      release = resolve
+      abort = () => { reject(signal.reason instanceof Error ? signal.reason : new Error('Classifier aborted')) }
+      if (signal.aborted) abort()
+      else signal.addEventListener('abort', abort, { once: true })
+    })
+    this.requests.push({ input, signal, release })
+    const positive = input.utterance === STALE_QUESTION
+      || Object.values(SEMANTIC_QUESTIONS).some(question => question.text === input.utterance)
+    if (!positive) release()
+    try { await pending } finally { signal.removeEventListener('abort', abort) }
+    const text = JSON.stringify({ decision: positive ? 'interrupt' : 'continue' })
+    yield { type: 'block-start', index: 0, blockType: 'text' }
+    yield { type: 'text-delta', index: 0, text }
+    yield { type: 'block-end', index: 0, block: { type: 'text', text } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  }
+}
 
 /** PCM sine followed by silence exercises the real browser's utterance detector. */
 function microphoneWave(): Buffer {
@@ -44,12 +95,27 @@ function fallbackPcm(): Buffer {
 
 describe.skipIf(MODE === 'record')('web voice calls', () => {
   it.each([
-    { preset: 'macau-customer-service', entry: '/', stopPhrase: undefined },
-    { preset: 'macau-customer-service-wiki', entry: '/', stopPhrase: undefined },
-    { preset: 'macau-customer-service', entry: '/mobile.html', stopPhrase: undefined },
-    { preset: 'macau-customer-service', entry: '/', stopPhrase: '停一下' },
-    { preset: 'macau-customer-service', entry: '/mobile.html', stopPhrase: 'hold on' },
-  ])('retains $preset voice messages after hangup at $entry with stop phrase $stopPhrase', async ({ preset, entry, stopPhrase }) => {
+    { preset: 'macau-customer-service', entry: '/', stopPhrase: undefined, semanticLanguage: undefined },
+    { preset: 'macau-customer-service-wiki', entry: '/', stopPhrase: undefined, semanticLanguage: undefined },
+    { preset: 'macau-customer-service', entry: '/mobile.html', stopPhrase: undefined, semanticLanguage: undefined },
+    { preset: 'macau-customer-service', entry: '/', stopPhrase: '停一下', semanticLanguage: undefined },
+    { preset: 'macau-customer-service', entry: '/mobile.html', stopPhrase: 'hold on', semanticLanguage: undefined },
+    { preset: 'macau-customer-service', entry: '/customer', stopPhrase: undefined, semanticLanguage: 'cantonese' as const },
+    { preset: 'macau-customer-service', entry: '/mobile.html?ui=cem-chat', stopPhrase: undefined, semanticLanguage: 'english' as const },
+  ])('retains $preset voice messages after hangup at $entry with stop phrase $stopPhrase and semantic $semanticLanguage', async ({ preset, entry, stopPhrase, semanticLanguage }) => {
+    const customer = entry === '/customer'
+    const mobileChat = entry.includes('ui=cem-chat')
+    const labels = customer ? {
+      start: '開始語音通話', dialog: '澳電智能客服語音通話',
+      speaking: '客服正在回答…', listening: '正在聆聽，請說出你的問題', end: '掛斷語音通話',
+    } : mobileChat ? {
+      start: '想直接說？ 與澳電助手通話', dialog: '澳電語音通話',
+      speaking: '澳電助手正在回答…', listening: '正在聆聽，請說…', end: '結束通話',
+    } : {
+      start: 'Start voice call', dialog: 'Customer service voice call',
+      speaking: 'Speaking…', listening: 'Listening. What can we help with?', end: 'End call',
+    }
+    const snapshotSurface = customer ? '-customer' : mobileChat ? '-mobile-chat' : ''
     const root = await mkdtemp(join(tmpdir(), 'dsh-voice-call-'))
     const wave = join(root, 'microphone.wav')
     await writeFile(wave, microphoneWave())
@@ -176,12 +242,28 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
     })
     const prior = process.env.DASHSCOPE_API_KEY
     process.env.DASHSCOPE_API_KEY = 'voice-call-fixture-key'
+    const speechConfig = loadOverlayPatches('voice call fixture', fileURLToPath(new URL('../../../packages/bundle/web-app/cordis.patch.yml', import.meta.url)))
+      .flatMap(patch => patch.insert ?? []).find(entry => entry.id === 'speech-web')?.config as Pick<SpeechWebConfig, 'call' | 'authority' | 'maxTranscriptionBodyBytes'>
+    if (speechConfig.call === undefined) throw new Error('Shipped call configuration unavailable')
+    const overlay = join(root, 'speech-overlay.json')
+    await writeFile(overlay, JSON.stringify([{ id: 'speech-web', config: {
+      ...speechConfig,
+      call: { ...speechConfig.call, interruption: { ...speechConfig.call.interruption, semantic: {
+        provider: 'interruption-fixture', model: 'interruption-fixture', timeoutMs: 5000,
+        maxInputChars: 2400, maxOutputTokens: 32, maxConcurrent: 4,
+      } } },
+    } }]))
+    const semanticQuestion = semanticLanguage === undefined ? undefined : SEMANTIC_QUESTIONS[semanticLanguage]
     const scaffold = await launchWebScaffold({
-      replayFixture: FIXTURE, paceMs: 1000,
+      replayFixture: semanticLanguage === undefined ? FIXTURE
+        : fileURLToPath(new URL(`./snapshots/voice-call/semantic-${semanticLanguage}.session.jsonl`, import.meta.url)),
+      extraOverlayPath: overlay, paceMs: 1000,
       agentPresets: { roots: [{ path: fileURLToPath(new URL('../../cli/config/agent-presets', import.meta.url)), trust: 'system' }], default: preset },
     })
+    const classifier = new InterruptionFixtureAdapter()
+    scaffold.ctx.effect(() => scaffold.ctx.llm.registerAdapter(['interruption-fixture'], classifier), 'voice fixture classifier')
     const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${wave}`] })
-    const page = entry === '/mobile.html'
+    const page = entry.startsWith('/mobile.html')
       ? await browser.newPage({ viewport: { width: 390, height: 844 }, locale: 'en-US', isMobile: true, hasTouch: true })
       : await newEnglishPage(browser)
     try {
@@ -217,9 +299,10 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
       })
       const greetingLoaded = page.waitForResponse(response => response.url().includes('/api/speech/greeting?')
         && response.status() === (entry === '/mobile.html' ? 403 : 200))
-      await page.goto(`${scaffold.baseUrl}${entry}`, { waitUntil: 'load' })
+      await page.goto(`${scaffold.baseUrl}${customer || mobileChat ? '/' : entry}`, { waitUntil: 'load' })
       await connectFreshWorkspace(page, scaffold.workspaceCwd)
-      const callButton = page.getByRole('button', { name: 'Start voice call', exact: true })
+      if (customer || mobileChat) await page.goto(`${scaffold.baseUrl}${entry}`, { waitUntil: 'load' })
+      const callButton = page.getByRole('button', { name: labels.start, exact: true })
       await callButton.waitFor({ timeout: 15000 })
       await greetingLoaded
       if (entry === '/mobile.html') {
@@ -237,10 +320,10 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
         await retryLoaded
       }
       await callButton.click()
-      const dialog = page.getByRole('dialog', { name: 'Customer service voice call' })
+      const dialog = page.getByRole('dialog', { name: labels.dialog })
       await dialog.waitFor()
       await expect.poll(() => socket !== undefined).toBe(true)
-      await page.getByText('Speaking…', { exact: true }).waitFor()
+      await dialog.getByText(labels.speaking, { exact: true }).waitFor()
       if (entry === '/mobile.html') {
         expect(mobileGreetingRequests).toBeGreaterThanOrEqual(2)
         expect(mobileMediaRequests).toBe(0)
@@ -269,13 +352,13 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
       expect(pcmFrames).toBe(0)
       expect(completedReplies()).toBe(0)
       const openingAria = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
-      await compareOrRefreshGolden(fileURLToPath(new URL('./snapshots/voice-call/greeting.expected.md', import.meta.url)), openingAria, MODE)
+      await compareOrRefreshGolden(fileURLToPath(new URL(`./snapshots/voice-call/greeting${snapshotSurface}.expected.md`, import.meta.url)), openingAria, MODE)
       await page.waitForFunction(() => Reflect.get(window, '__voiceGreetingEnded') === true)
 
       await expect.poll(() => pcmFrames, { timeout: 15000 }).toBeGreaterThan(2)
       const viewport = page.viewportSize()!
       const bounds = await dialog.boundingBox()
-      expect(bounds).toMatchObject({ x: 0, y: 0, width: viewport.width, height: viewport.height })
+      if (!customer) expect(bounds).toMatchObject({ x: 0, y: 0, width: viewport.width, height: viewport.height })
       expect(await dialog.getByRole('button', { name: 'Send this utterance' }).count()).toBe(0)
       socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
       socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: '', stash: FIRST_PROMPT_SEGMENT }))
@@ -283,7 +366,7 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
       socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
       socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: '', stash: SECOND_PROMPT_SEGMENT }))
       await dialog.getByText(PROMPT, { exact: true }).waitFor()
-      await page.getByText('Listening. What can we help with?', { exact: true }).waitFor()
+      await dialog.getByText(labels.listening, { exact: true }).waitFor()
       expect(await page.evaluate(() => {
         const media = Reflect.get(window, '__voiceMedia') as Set<HTMLMediaElement>
         return media.size > 0 && [...media].every(element => element.paused)
@@ -291,7 +374,7 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
       expect(completedReplies()).toBe(0)
       socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: SECOND_PROMPT_SEGMENT }))
       await expect.poll(() => ttsTexts.length, { timeout: 15000 }).toBeGreaterThanOrEqual(1)
-      await page.getByText('Speaking…', { exact: true }).waitFor()
+      await dialog.getByText(labels.speaking, { exact: true }).waitFor()
       await expect.poll(completedReplies, { timeout: 15000 }).toBe(1)
       if (preset === 'macau-customer-service') expect(retrievalRequests).toContain('/rerank')
       const callContext = scaffold.ctx.agents.roots().flatMap(agent => agent.session.events)
@@ -317,11 +400,37 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
         })).toBe(true)
       }
       const captionsAtBottom = () => assistantCaption.evaluate((element) => {
-        const container = element.parentElement!.parentElement!
+        const container = element.closest('[role="log"]') ?? element.parentElement!.parentElement!
         return Math.abs(container.scrollHeight - container.clientHeight - container.scrollTop) < 2
       })
       await expect.poll(captionsAtBottom).toBe(true)
-      for (const text of ['', '好的', '你今晚想食啲乜？', 'Where can I pay my electricity bill?']) {
+      if (semanticQuestion !== undefined) {
+        socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
+        socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: STALE_QUESTION }))
+        await expect.poll(() => classifier.requests.length).toBe(1)
+        const stale = classifier.requests[0]!
+        expect(stale.input).toMatchObject({ utterance: STALE_QUESTION, question: PROMPT })
+        expect(stale.input.playback.length).toBeGreaterThan(0)
+        const timeBefore = await page.evaluate(() => {
+          const media = Reflect.get(window, '__voiceMedia') as Set<HTMLMediaElement>
+          const active = [...media].find(element => !element.paused)
+          Reflect.set(window, '__voicePendingMedia', active)
+          return active?.currentTime
+        })
+        expect(timeBefore).toBeDefined()
+        await expect.poll(() => page.evaluate(() => {
+          const active = Reflect.get(window, '__voicePendingMedia') as HTMLMediaElement | undefined
+          return active?.paused === false ? active.currentTime : undefined
+        })).toBeGreaterThan(timeBefore! + 0.15)
+        expect(submittedPrompts()).toBe(1)
+        socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
+        socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: '好的' }))
+        await expect.poll(() => stale.signal.aborted).toBe(true)
+        stale.release()
+        expect(submittedPrompts()).toBe(1)
+      }
+      for (const text of ['', '嗯', '停', '好的', '你今晚想食啲乜？']) {
+        const requestsBefore = classifier.requests.length
         const framesBefore = pcmFrames
         socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
         if (text !== '') {
@@ -329,25 +438,44 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
           socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: text }))
         }
         await expect.poll(() => pcmFrames, { timeout: 5000 }).toBeGreaterThan(framesBefore + 12)
-        expect(await dialog.getByText('Speaking…', { exact: true }).count()).toBe(1)
+        expect(await dialog.getByText(labels.speaking, { exact: true }).count()).toBe(1)
         expect(submittedPrompts()).toBe(1)
         expect(completedReplies()).toBe(1)
         if (text !== '') expect(await dialog.getByText(text, { exact: true }).count()).toBe(0)
+        expect(classifier.requests.length).toBe(requestsBefore + (text === '你今晚想食啲乜？' ? 1 : 0))
       }
       const aria = (await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)).replace(/\b\d{2}:\d{2}\b/g, '00:00')
-      await compareOrRefreshGolden(fileURLToPath(new URL('./snapshots/voice-call/call.expected.md', import.meta.url)), aria, MODE)
+      await compareOrRefreshGolden(fileURLToPath(new URL(`./snapshots/voice-call/call${snapshotSurface}.expected.md`, import.meta.url)), aria, MODE)
       await page.screenshot({ path: `/tmp/dsh-realtime-${preset}.png` })
-      if (preset === 'macau-customer-service') {
+      if (preset === 'macau-customer-service' && !customer && !mobileChat) {
         await page.setViewportSize({ width: 390, height: 844 })
         expect(await dialog.boundingBox()).toMatchObject({ x: 0, y: 0, width: 390, height: 844 })
         await expect.poll(captionsAtBottom).toBe(true)
         await page.screenshot({ path: '/tmp/dsh-realtime-mobile.png' })
       }
-      if (stopPhrase === undefined) {
+      if (semanticQuestion !== undefined) {
+        const requestsBefore = classifier.requests.length
+        socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
+        socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: semanticQuestion.text, stash: '' }))
+        socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: semanticQuestion.text }))
+        await expect.poll(() => classifier.requests.length).toBe(requestsBefore + 1)
+        const request = classifier.requests.at(-1)!
+        expect(request.input.utterance).toBe(semanticQuestion.text)
+        expect(await dialog.getByText(labels.speaking, { exact: true }).count()).toBe(1)
+        expect(submittedPrompts()).toBe(1)
+        request.release()
+        await expect.poll(submittedPrompts, { timeout: 10000 }).toBe(2)
+        await expect.poll(completedReplies, { timeout: 15000 }).toBe(2)
+        await dialog.getByText(semanticQuestion.text, { exact: true }).waitFor()
+        await dialog.getByText(semanticQuestion.reply, { exact: true }).waitFor()
+        const semanticAria = (await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd))
+          .replace(/\b\d{2}:\d{2}\b/g, '00:00')
+        await compareOrRefreshGolden(fileURLToPath(new URL(`./snapshots/voice-call/semantic-${semanticLanguage}.expected.md`, import.meta.url)), semanticAria, MODE)
+      } else if (stopPhrase === undefined) {
         releaseTtsFailure()
         await expect.poll(() => fallbackRequests.length, { timeout: 20000 }).toBeGreaterThanOrEqual(1)
         expect(fallbackRequests[0]).toEqual({ text: ttsTexts[2], voice: 'Kiki', language_type: 'Chinese' })
-        await page.getByText('Listening. What can we help with?', { exact: true }).waitFor({ timeout: 20000 })
+        await dialog.getByText(labels.listening, { exact: true }).waitFor({ timeout: 20000 })
         expect(fallbackAuthorizations.every(value => value === 'Bearer voice-call-fixture-key')).toBe(true)
         expect(await assistantCaption.textContent()).toBe(REPLY)
         expect(await dialog.getByRole('alert').count()).toBe(0)
@@ -355,14 +483,16 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
           .replace(/\b\d{2}:\d{2}\b/g, '00:00')
         await compareOrRefreshGolden(fileURLToPath(new URL('./snapshots/voice-call/tts-fallback.expected.md', import.meta.url)), fallbackAria, MODE)
       } else {
+        const requestsBeforeStop = classifier.requests.length
         socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
         socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: stopPhrase, stash: '' }))
         socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: stopPhrase }))
-        await page.getByText('Listening. What can we help with?', { exact: true }).waitFor({ timeout: 5000 })
+        await dialog.getByText(labels.listening, { exact: true }).waitFor({ timeout: 5000 })
         const framesAfterStop = pcmFrames
         await expect.poll(() => pcmFrames, { timeout: 5000 }).toBeGreaterThan(framesAfterStop + 12)
         expect(submittedPrompts()).toBe(1)
         expect(completedReplies()).toBe(1)
+        expect(classifier.requests.length).toBe(requestsBeforeStop)
         expect(fallbackRequests).toEqual([])
         expect(await assistantCaption.textContent()).toBe(REPLY)
         const interruptedAria = (await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd))
@@ -371,30 +501,33 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
       }
       const framesAfterFallback = pcmFrames
       await expect.poll(() => pcmFrames, { timeout: 5000 }).toBeGreaterThan(framesAfterFallback)
-      socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
-      socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: '', stash: 'Still connected' }))
-      await dialog.getByText('Still connected', { exact: true }).waitFor()
+      if (semanticQuestion === undefined) {
+        socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
+        socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: '', stash: 'Still connected' }))
+        await dialog.getByText('Still connected', { exact: true }).waitFor()
+      }
       expect(await dialog.getByRole('alert').count()).toBe(0)
-      await dialog.getByRole('button', { name: 'End call', exact: true }).click()
+      await dialog.getByRole('button', { name: labels.end, exact: true }).click()
       await dialog.waitFor({ state: 'hidden' })
       await page.getByText(PROMPT, { exact: true }).last().waitFor()
       await page.getByText(REPLY, { exact: true }).last().waitFor()
+      if (semanticQuestion !== undefined) await page.getByText(semanticQuestion.reply, { exact: true }).last().waitFor()
       await page.reload()
+      if (customer) await page.getByRole('button', { name: /^開啟對話：/ }).first().click()
       await page.getByText(REPLY, { exact: true }).last().waitFor({ timeout: 15000 })
-      expect(await page.getByRole('dialog', { name: 'Customer service voice call' }).count()).toBe(0)
+      expect(await page.getByRole('dialog', { name: labels.dialog }).count()).toBe(0)
     } catch (error) {
       console.error(error)
       console.error(await page.locator('body').innerText())
       await page.screenshot({ path: `/tmp/dsh-voice-${preset}.png` })
       throw error
     } finally {
-      await browser.close()
-      await scaffold.close()
+      const cleanup = await Promise.allSettled([browser.close(), scaffold.close()])
       for (const client of server.clients) client.terminate()
-      await new Promise<void>((resolve, reject) =>{  server.close((error) =>{  if (error) reject(error); else resolve() }) })
-      await new Promise<void>((resolve, reject) => {
-        fallbackServer.close((error) => { if (error) reject(error); else resolve() })
-      })
+      cleanup.push(...await Promise.allSettled([
+        new Promise<void>((resolve, reject) => { server.close((error) => { if (error) reject(error); else resolve() }) }),
+        new Promise<void>((resolve, reject) => { fallbackServer.close((error) => { if (error) reject(error); else resolve() }) }),
+      ]))
       if (priorUrl === undefined) Reflect.deleteProperty(process.env, 'DSH_MACAU_ASR_REALTIME_URL')
       else process.env.DSH_MACAU_ASR_REALTIME_URL = priorUrl
       if (priorTtsUrl === undefined) Reflect.deleteProperty(process.env, 'DSH_MACAU_TTS_REALTIME_URL')
@@ -410,6 +543,8 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
         else process.env[key] = value
       }
       await rm(root, { recursive: true, force: true })
+      const failures = cleanup.flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])
+      if (failures.length > 0) throw new AggregateError(failures, 'Voice call fixture cleanup failed')
     }
   }, 60000)
 })

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createScope, scopeTarget } from '@deepseek-ai/dsh-scope'
 import { createUserMessage, CallId, createMessage, createToolResultMessage, freezeMessage } from '@deepseek-ai/dsh-llm'
+import type { ToolResultMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, TOOL_NOT_STARTED } from '@deepseek-ai/dsh-session'
 import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
 import InvariantRegistry, { InvariantError } from '@deepseek-ai/dsh-invariants'
@@ -272,7 +273,7 @@ describe('session-log invariants', () => {
     session.append('turn/start', { turn: 2 })
     expect(() => session.append('tool/result', {
       ...original.data,
-      message: freezeMessage({
+      message: freezeMessage<ToolResultMessage>({
         ...original.data.message,
         content: [{
           ...original.data.message.content[0],
@@ -311,7 +312,7 @@ describe('session-log invariants', () => {
 
     expect(() => session.append('tool/result', {
       ...original.data,
-      message: freezeMessage({
+      message: freezeMessage<ToolResultMessage>({
         ...original.data.message,
         content: [{
           ...original.data.message.content[0],

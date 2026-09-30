@@ -10,6 +10,8 @@ Transcript length and general question forms cannot establish that a caller want
 
 ## Decision
 
+Optional [hybrid call interruption](../feature/2026-09-30-hybrid-call-interruption.md) supersedes rule-only admission and adds single-character suppression; this note retains the cancellation ownership and conservative screening rationale.
+
 The call controller screens input for the entire owned reply, including generation and synthesis preparation. It captures whether a candidate began during that reply and retains screening through final recognition even if playback finishes first. Unaccepted hypotheses remain transient and cannot change the displayed phase, add a conversation message, or cancel synthesis. Muting clears pending interruption evidence.
 
 Only explicit stop commands or final assistant-directed correction and clarification forms can claim the turn. A partial stop command needs the configured confirmation interval measured from recognized text; other directed requests require a final transcript. Short exact echo and longer similar echo are checked before intent, including quoted stop commands. Text length and arbitrary questions never independently authorize cancellation. Standalone stop commands clear pending questions and keep listening without another model request; compound commands retain the follow-up question. Listening without an active reply still accepts normal questions through the existing utterance merge interval.

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ConversationSnapshot, SessionFace, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import type { MessageId } from '@deepseek-ai/dsh-client-connection/client'
 import { VoiceCallController } from '../src/client/call.ts'
+import { createWebVoiceClient } from '../src/client/client.ts'
 import type { SpeechProfile, VoiceClient, VoicePlatform, VoicePlaybackEvents } from '../src/client/contract.ts'
 
 const profile: SpeechProfile = {
@@ -26,7 +27,7 @@ function bench() {
     snapshot = { ...snapshot, ...fields }
     for (const listener of listeners) listener()
   }
-  const prompt = vi.fn(async () => {
+  const prompt = vi.fn<SessionFace['prompt']>(async () => {
     update({ running: true, nodes: [{ kind: 'user', seq: 1, time: 0, source: null, content: [{ type: 'text', text: '账单怎么查' }] }] })
     return { ok: true as const, value: { accepted: true as const } }
   })
@@ -128,6 +129,266 @@ describe('continuous voice calls', () => {
     b.emit({ type: 'final', text: '账单怎么查' })
     await vi.waitFor(() => { expect(b.prompt).toHaveBeenCalledOnce() })
   }
+
+  function semanticBench() {
+    const b = liveBench()
+    const requests: { result: ReturnType<typeof deferred<{ decision: 'interrupt' | 'continue' }>>; signal: AbortSignal }[] = []
+    const classify = vi.fn<NonNullable<VoiceClient['classifyInterruption']>>(async (_request, signal) => {
+      const result = deferred<{ decision: 'interrupt' | 'continue' }>()
+      requests.push({ result, signal })
+      return await result.promise
+    })
+    ;(b.client as VoiceClient).classifyInterruption = classify
+    b.liveProfile = { ...b.liveProfile, call: { ...b.liveProfile.call!, interruption: {
+      ...b.liveProfile.call!.interruption, semantic: { timeoutMs: 1000 },
+    } } }
+    return { ...b, requests, classify }
+  }
+
+  it('keeps playback active during semantic classification and submits an accepted correction once', async () => {
+    const b = semanticBench()
+    await ask(b)
+    b.update({ partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: '你可以登入網上服務繳費。' }] } })
+    await vi.waitFor(() => { expect(b.call.getSnapshot().phase).toBe('playing') })
+    b.emit({ type: 'speech-start' })
+    b.emit({ type: 'partial', text: '我已經試過網上繳費' })
+    expect(b.classify).not.toHaveBeenCalled()
+    b.emit({ type: 'final', text: '我已經試過網上繳費，都係交唔到。' })
+    expect(b.call.getSnapshot().phase).toBe('playing')
+    expect(b.cancel).not.toHaveBeenCalled()
+    expect(b.prompt).toHaveBeenCalledOnce()
+    expect(b.classify.mock.calls[0]?.[0]).toEqual({ sessionId: 'call-session',
+      text: '我已經試過網上繳費，都係交唔到。', question: '账单怎么查', playback: '你可以登入網上服務繳費。' })
+    b.requests[0]!.result.resolve({ decision: 'interrupt' })
+    await vi.waitFor(() => { expect(b.prompt).toHaveBeenCalledTimes(2) })
+    expect(b.cancel).toHaveBeenCalledOnce()
+    expect(b.prompt.mock.calls[1]?.[0]).toEqual([{ type: 'text', text: '账单怎么查\n我已經試過網上繳費，都係交唔到。' }])
+    await b.call.stop()
+  })
+
+  it('does not call the model or stop playback for a single character or acknowledgement', async () => {
+    const b = semanticBench()
+    await ask(b)
+    b.finish('你可以登入網上服務繳費。')
+    await vi.waitFor(() => { expect(b.call.getSnapshot().phase).toBe('playing') })
+    for (const text of ['停', '嗯', '好', 'A', '好的', 'Thank you']) {
+      b.emit({ type: 'speech-start' })
+      b.emit({ type: 'partial', text })
+      b.emit({ type: 'final', text })
+      await new Promise((resolve) => { setTimeout(resolve, 15) })
+    }
+    expect(b.classify).not.toHaveBeenCalled()
+    expect(b.cancel).not.toHaveBeenCalled()
+    expect(b.call.getSnapshot().phase).toBe('playing')
+    await b.call.stop()
+  })
+
+  it('ignores a denied semantic candidate without adding a user message', async () => {
+    const b = semanticBench()
+    await ask(b)
+    b.finish('你可以登入網上服務繳費。')
+    await vi.waitFor(() => { expect(b.call.getSnapshot().phase).toBe('playing') })
+    b.emit({ type: 'final', text: '你幫我關一下門。' })
+    b.requests[0]!.result.resolve({ decision: 'continue' })
+    await new Promise((resolve) => { setTimeout(resolve, 20) })
+    expect(b.cancel).not.toHaveBeenCalled()
+    expect(b.prompt).toHaveBeenCalledOnce()
+    expect(b.call.getSnapshot().messages.some(row => row.text.includes('關一下門'))).toBe(false)
+    await b.call.stop()
+  })
+
+  it.each(['onset', 'empty-partial', 'empty-final', 'repeated-onset'] as const)(
+    'retains a finalized semantic candidate after noise with %s', async (noise) => {
+      vi.useFakeTimers()
+      const b = semanticBench()
+      try {
+        await ask(b)
+        b.finish('你可以登入網上服務繳費。')
+        await vi.advanceTimersByTimeAsync(0)
+        b.stopPlayback.mockClear()
+        b.emit({ type: 'final', text: '我已經試過網上繳費，都係交唔到。' })
+        b.emit({ type: 'speech-start' })
+        if (noise === 'empty-partial') b.emit({ type: 'partial', text: ' ' })
+        if (noise === 'empty-final') b.emit({ type: 'final', text: ' ' })
+        if (noise === 'repeated-onset') b.emit({ type: 'speech-start' })
+        expect(b.requests[0]!.signal.aborted).toBe(false)
+        expect(b.stopPlayback).not.toHaveBeenCalled()
+        b.requests[0]!.result.resolve({ decision: 'interrupt' })
+        await vi.advanceTimersByTimeAsync(10)
+        expect(b.prompt).toHaveBeenCalledTimes(2)
+        expect(b.stopPlayback).toHaveBeenCalled()
+        expect(b.prompt.mock.calls[1]?.[0]).toEqual([
+          { type: 'text', text: '账单怎么查\n我已經試過網上繳費，都係交唔到。' },
+        ])
+      } finally { await b.call.stop(); vi.useRealTimers() }
+    },
+  )
+
+  it('ignores a single-character stop after a separately finalized acknowledgement', async () => {
+    vi.useFakeTimers()
+    const b = semanticBench()
+    b.liveProfile = { ...b.liveProfile, call: { ...b.liveProfile.call!, utteranceMergeMs: 850 } }
+    try {
+      await ask(b)
+      b.finish('你可以登入網上服務繳費。')
+      await vi.advanceTimersByTimeAsync(0)
+      b.stopPlayback.mockClear()
+      b.emit({ type: 'final', text: '嗯' })
+      b.emit({ type: 'speech-start' })
+      b.emit({ type: 'partial', text: '停' })
+      await vi.advanceTimersByTimeAsync(500)
+      b.emit({ type: 'final', text: '停' })
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(b.classify).not.toHaveBeenCalled()
+      expect(b.stopPlayback).not.toHaveBeenCalled()
+      expect(b.prompt).toHaveBeenCalledOnce()
+      expect(b.call.getSnapshot().phase).toBe('playing')
+    } finally { await b.call.stop(); vi.useRealTimers() }
+  })
+
+  it('cancels stale semantic candidates when speech resumes and retains the full correction', async () => {
+    const b = semanticBench()
+    b.liveProfile = { ...b.liveProfile, call: { ...b.liveProfile.call!, utteranceMergeMs: 850 } }
+    await ask(b)
+    b.update({ partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: '你可以登入網上服務繳費。' }] } })
+    await vi.waitFor(() => { expect(b.call.getSnapshot().phase).toBe('playing') })
+    b.emit({ type: 'final', text: '我已經試過網上繳費。' })
+    b.emit({ type: 'speech-start' })
+    expect(b.requests[0]!.signal.aborted).toBe(false)
+    b.emit({ type: 'partial', text: '但係' })
+    b.requests[0]!.result.resolve({ decision: 'interrupt' })
+    await Promise.resolve()
+    expect(b.requests[0]!.signal.aborted).toBe(true)
+    expect(b.cancel).not.toHaveBeenCalled()
+    b.emit({ type: 'final', text: '但係仍然交唔到。' })
+    expect(b.classify.mock.calls[1]?.[0].text).toBe('我已經試過網上繳費。\n但係仍然交唔到。')
+    b.requests[1]!.result.resolve({ decision: 'interrupt' })
+    await vi.waitFor(() => { expect(b.cancel).toHaveBeenCalledOnce() })
+    await vi.waitFor(() => { expect(b.prompt).toHaveBeenCalledTimes(2) }, { timeout: 1500 })
+    expect(b.prompt.mock.calls[1]?.[0]).toEqual([{ type: 'text', text: '账单怎么查\n我已經試過網上繳費。\n但係仍然交唔到。' }])
+    await b.call.stop()
+  })
+
+  it.each(['mute', 'manual', 'hangup'] as const)('discards a late semantic acceptance after %s', async (action) => {
+    const b = semanticBench()
+    await ask(b)
+    b.finish('你可以登入網上服務繳費。')
+    await vi.waitFor(() => { expect(b.call.getSnapshot().phase).toBe('playing') })
+    b.emit({ type: 'final', text: 'What if I do not have an account?' })
+    let stopping: Promise<void> | undefined
+    if (action === 'mute') b.call.setMuted(true)
+    else if (action === 'manual') b.call.interrupt()
+    else stopping = b.call.stop()
+    expect(b.requests[0]!.signal.aborted).toBe(true)
+    b.requests[0]!.result.resolve({ decision: 'interrupt' })
+    await stopping
+    await new Promise((resolve) => { setTimeout(resolve, 20) })
+    expect(b.prompt).toHaveBeenCalledOnce()
+    if (action === 'mute') expect(b.cancel).not.toHaveBeenCalled()
+    await b.call.stop()
+  })
+
+  it('keeps playback on classifier timeout or transport failure', async () => {
+    vi.useFakeTimers()
+    const b = semanticBench()
+    try {
+      await ask(b)
+      b.finish('你可以登入網上服務繳費。')
+      await vi.advanceTimersByTimeAsync(0)
+      b.emit({ type: 'final', text: '我已經試過網上繳費。' })
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(b.requests[0]!.signal.aborted).toBe(true)
+      b.requests[0]!.result.resolve({ decision: 'interrupt' })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(b.cancel).not.toHaveBeenCalled()
+      b.emit({ type: 'speech-start' })
+      b.emit({ type: 'final', text: '但係仍然交唔到。' })
+      b.requests[1]!.result.reject(new Error('network unavailable'))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(b.cancel).not.toHaveBeenCalled()
+      expect(b.call.getSnapshot().phase).toBe('playing')
+    } finally { await b.call.stop(); vi.useRealTimers() }
+  })
+
+  it('accepts a late verdict as the next question when the old playback has finished', async () => {
+    const b = semanticBench()
+    await ask(b)
+    b.finish('你可以登入網上服務繳費。')
+    await vi.waitFor(() => { expect(b.call.getSnapshot().phase).toBe('playing') })
+    b.emit({ type: 'final', text: 'What if I do not have an account?' })
+    b.playback()!.onEnded()
+    await vi.waitFor(() => { expect(b.call.getSnapshot().phase).toBe('listening') })
+    b.cancel.mockClear()
+    b.requests[0]!.result.resolve({ decision: 'interrupt' })
+    await vi.waitFor(() => { expect(b.prompt).toHaveBeenCalledTimes(2) })
+    expect(b.cancel).not.toHaveBeenCalled()
+    expect(b.prompt.mock.calls[1]?.[0]).toEqual([{ type: 'text', text: 'What if I do not have an account?' }])
+    await b.call.stop()
+  })
+
+  it.each(['timeout', 'hangup'] as const)('settles the HTTP classifier through abort on %s', async (end) => {
+    vi.useFakeTimers()
+    const b = semanticBench()
+    const aborted = vi.fn()
+    const fetcher = vi.fn<typeof fetch>((_input, init) => new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal
+      if (!signal) throw new Error('The classifier request requires cancellation')
+      signal.throwIfAborted()
+      signal.addEventListener('abort', () => { aborted(); reject(new DOMException('Request aborted', 'AbortError')) }, { once: true })
+    }))
+    const webClient = createWebVoiceClient(fetcher)
+    b.classify.mockImplementation(webClient.classifyInterruption!.bind(webClient))
+    try {
+      await ask(b)
+      b.finish('你可以登入網上服務繳費。')
+      await vi.advanceTimersByTimeAsync(0)
+      b.stopPlayback.mockClear()
+      b.emit({ type: 'final', text: '我已經試過網上繳費。' })
+      expect(fetcher).toHaveBeenCalledOnce()
+      if (end === 'timeout') {
+        await vi.advanceTimersByTimeAsync(1000)
+        expect(aborted).toHaveBeenCalledOnce()
+        expect(b.stopPlayback).not.toHaveBeenCalled()
+        expect(b.call.getSnapshot().phase).toBe('playing')
+      }
+      await b.call.stop()
+      expect(aborted).toHaveBeenCalledOnce()
+      expect(b.call.getSnapshot().phase).toBe('idle')
+      expect(b.close).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { await b.call.stop(); vi.useRealTimers() }
+  })
+
+  it('compares a stop with audible sentences rather than queued answer text', async () => {
+    const b = semanticBench()
+    await ask(b)
+    b.finish('請準備帳單。你可以先停一下再操作。')
+    await vi.waitFor(() => { expect(b.platform.play).toHaveBeenCalledOnce() })
+    b.stopPlayback.mockClear()
+    b.emit({ type: 'final', text: '停一下' })
+    expect(b.classify).not.toHaveBeenCalled()
+    expect(b.stopPlayback).toHaveBeenCalled()
+    await b.call.stop()
+  })
+
+  it('gives the classifier only the current and previous audible sentences', async () => {
+    const b = semanticBench()
+    await ask(b)
+    b.finish('第一句已播放。第二句正在播放。第三句正在播放。第四句仍在佇列。')
+    await vi.waitFor(() => { expect(b.platform.play).toHaveBeenCalledOnce() })
+    b.emit({ type: 'final', text: '我想問另外一個繳費問題。' })
+    expect(b.classify.mock.calls[0]?.[0].playback).toBe('第一句已播放。')
+    b.requests[0]!.result.resolve({ decision: 'continue' })
+    b.playback()!.onEnded()
+    await vi.waitFor(() => { expect(b.platform.play).toHaveBeenCalledTimes(2) })
+    b.playback()!.onEnded()
+    await vi.waitFor(() => { expect(b.platform.play).toHaveBeenCalledTimes(3) })
+    b.emit({ type: 'speech-start' })
+    b.emit({ type: 'final', text: '但係我冇網上戶口。' })
+    expect(b.classify.mock.calls[1]?.[0].playback).toBe('第二句正在播放。 第三句正在播放。')
+    b.requests[1]!.result.resolve({ decision: 'continue' })
+    await b.call.stop()
+  })
 
   it('mutes outgoing PCM and discards an unfinished utterance without stopping answer playback', async () => {
     const b = liveBench()
