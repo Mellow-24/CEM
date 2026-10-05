@@ -1,3 +1,6 @@
-# Bilingual-pair consistency record.
-2026-09-14-call-history-and-continuations.md: 82e614cacc96b5904e31b616b87457a660c88a34
-2026-09-14-call-history-and-continuations.zh.md: 203f32f09a0707ce801dbb2fb1754612334796d4
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-14-call-history-and-continuations.md
+2026-09-14-call-history-and-continuations.md: 90fe3762f2b8a4cbf9da0639dd4e44f3cd56a280
+2026-09-14-call-history-and-continuations.zh.md: 8f96c17602ae5490bfe113052b11c01489844ca1

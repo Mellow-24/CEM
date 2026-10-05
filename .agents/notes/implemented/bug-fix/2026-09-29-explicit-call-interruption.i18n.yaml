@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-29-explicit-call-interruption.md
-2026-09-29-explicit-call-interruption.md: 72a4f26fd5df8ae1219e5280a723671b4ae8530e
-2026-09-29-explicit-call-interruption.zh.md: f71f1057b144b5481e1c717080e01a2cb026bc9e
+2026-09-29-explicit-call-interruption.md: 261afe055084881d43d3e31530307b6687225385
+2026-09-29-explicit-call-interruption.zh.md: 007d3d00e65801318d6dd2d2482770843570d482

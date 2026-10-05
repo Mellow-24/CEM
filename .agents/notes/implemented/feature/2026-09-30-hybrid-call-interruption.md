@@ -16,7 +16,7 @@ The Host makes one bounded non-thinking request without retrieval or retries. Ti
 
 The exact auxiliary request is logged as `speech/interruption-request`, with `ignorable: true`. It contributes no conversation message; older readers may skip it without changing reconstructed history. No ASR, answer-language, RAG, TTS, or conversation prompt setting changes.
 
-This partially supersedes rule-only admission in [explicit call interruption](../bug-fix/2026-09-29-explicit-call-interruption.md); its full-reply screening, transient rejected input, cancellation ownership, and continuation rationale remain active.
+This partially supersedes rule-only admission in [explicit call interruption](../bug-fix/2026-09-29-explicit-call-interruption.md); its full-reply screening, transient rejected input and cancellation ownership remain active. [Customer dialogue repair](../bug-fix/2026-10-05-customer-dialogue-repair.md) governs the accepted message without changing admission.
 
 ## Alternatives considered
 

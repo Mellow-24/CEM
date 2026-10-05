@@ -211,7 +211,6 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
     let awaitSpeechStart = false
     let synthesisProfile = synthesis.profile
     let activeQuestion = ''
-    let continuation = ''
     let fail!: (error: unknown) => void
     const maxPendingAudioBytes = call.maxPendingAudioMs / PCM_FRAME_MS * PCM_FRAME_BYTES
     const ended = new Promise<void>((resolve, reject) => {
@@ -230,7 +229,6 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
     const interrupt = (): void => {
       stopOpening()
       if (replyAbort !== undefined && !replyAbort.signal.aborted) {
-        continuation = activeQuestion
         this.transcript.interrupt()
       }
       replyAbort?.abort()
@@ -264,8 +262,7 @@ export class VoiceCallController implements HostObservable<VoiceCallView> {
       if (!captureReady || worker || combined.aborted) return
       worker = (async () => {
         while (pending.length > 0 && !combined.aborted) {
-          const text = appendUtteranceSegment(continuation, pending.splice(0).join('\n'))
-          continuation = ''
+          const text = pending.splice(0).join('\n')
           activeQuestion = text
           replySerial++
           audibleSentences = []

@@ -13,15 +13,15 @@ async function setup() {
   return ctx
 }
 
-function openStep(ctx: Context) {
+function openStep(ctx: Context, evidencePosition: 'before' | 'after' = 'before') {
   const session = ctx.sessions.create()
   session.append('turn/start', { turn: 1 })
   session.append('step/start', { turn: 1, step: 1 })
-  session.append('user/message', createUserMessage({
+  const question = createUserMessage({
     source: { kind: 'user' },
     content: [{ type: 'text', text: '如何繳費？' }],
-  }), { surfaceOp: 'append' })
-  session.append('user/message', createUserMessage({
+  })
+  const evidence = createUserMessage({
     source: {
       kind: 'plugin',
       plugin: 'customer-service-knowledge',
@@ -29,7 +29,10 @@ function openStep(ctx: Context) {
       summary: 'Approved company knowledge: 1 excerpt(s)',
     },
     content: [{ type: 'text', text: '可透過澳電應用程式繳費。' }],
-  }), { surfaceOp: 'append' })
+  })
+  for (const message of evidencePosition === 'before' ? [evidence, question] : [question, evidence]) {
+    session.append('user/message', message, { surfaceOp: 'append' })
+  }
   return session
 }
 
@@ -49,9 +52,9 @@ function retrieval(overrides: Record<string, unknown> = {}) {
 }
 
 describe('automatic knowledge retrieval invariants', () => {
-  it('accepts one retrieval matching the direct question and evidence context', async () => {
+  it.each(['before', 'after'] as const)('accepts logged evidence %s its matching direct question', async (position) => {
     const ctx = await setup()
-    expect(() => openStep(ctx).append('customer-service-knowledge/retrieval', retrieval()))
+    expect(() => openStep(ctx, position).append('customer-service-knowledge/retrieval', retrieval()))
       .not.toThrow()
     await ctx.fiber.dispose()
   })

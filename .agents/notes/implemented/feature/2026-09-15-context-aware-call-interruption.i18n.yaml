@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-15-context-aware-call-interruption.md
-2026-09-15-context-aware-call-interruption.md: 155b19d215224233d4bee6ff7d4e7dc62ad50511
-2026-09-15-context-aware-call-interruption.zh.md: 559250c40bb58030f0c1d82bbb8caffa0de4a03d
+2026-09-15-context-aware-call-interruption.md: 7f4aa2c88fd6ec085f2848d9e35d0a97db42acf9
+2026-09-15-context-aware-call-interruption.zh.md: b93be2a672badc6fa0409473ca7308cecea7fd17

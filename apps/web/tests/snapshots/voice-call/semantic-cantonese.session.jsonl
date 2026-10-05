@@ -11,3 +11,13 @@
 {"type":"assistant/chunk","seq":9,"time":1788134400010,"data":{"turn":2,"step":2,"chunk":{"type":"text-delta","index":0,"text":"可以先確認付款有冇成功扣款，再聯絡銀行查詢失敗原因。"}}}
 {"type":"assistant/chunk","seq":10,"time":1788134400011,"data":{"turn":2,"step":2,"chunk":{"type":"block-end","index":0,"block":{"type":"text","text":"可以先確認付款有冇成功扣款，再聯絡銀行查詢失敗原因。"}}}}
 {"type":"assistant/chunk","seq":11,"time":1788134400012,"data":{"turn":2,"step":2,"chunk":{"type":"finish","reason":{"kind":"stop"}}}}
+{"type":"user/message","seq":12,"time":1788134400013,"data":{"content":[{"type":"text","text":"唔係，我想問你個鋪頭\n嘅地址。"}],"source":{"kind":"user","rpcId":"{{rpcId}}"}},"surfaceOp":"append"}
+{"type":"assistant/chunk","seq":13,"time":1788134400014,"data":{"turn":3,"step":3,"chunk":{"type":"block-start","index":0,"blockType":"text"}}}
+{"type":"assistant/chunk","seq":14,"time":1788134400015,"data":{"turn":3,"step":3,"chunk":{"type":"text-delta","index":0,"text":"你想查詢邊間客戶服務中心嘅地址？"}}}
+{"type":"assistant/chunk","seq":15,"time":1788134400016,"data":{"turn":3,"step":3,"chunk":{"type":"block-end","index":0,"block":{"type":"text","text":"你想查詢邊間客戶服務中心嘅地址？"}}}}
+{"type":"assistant/chunk","seq":16,"time":1788134400017,"data":{"turn":3,"step":3,"chunk":{"type":"finish","reason":{"kind":"stop"}}}}
+{"type":"user/message","seq":17,"time":1788134400018,"data":{"content":[{"type":"text","text":"唔係，我問你公司嘅地址。"}],"source":{"kind":"user","rpcId":"{{rpcId}}"}},"surfaceOp":"append"}
+{"type":"assistant/chunk","seq":18,"time":1788134400019,"data":{"turn":4,"step":4,"chunk":{"type":"block-start","index":0,"blockType":"text"}}}
+{"type":"assistant/chunk","seq":19,"time":1788134400020,"data":{"turn":4,"step":4,"chunk":{"type":"text-delta","index":0,"text":"你想查詢公司總部，定係客戶服務中心嘅地址？"}}}
+{"type":"assistant/chunk","seq":20,"time":1788134400021,"data":{"turn":4,"step":4,"chunk":{"type":"block-end","index":0,"block":{"type":"text","text":"你想查詢公司總部，定係客戶服務中心嘅地址？"}}}}
+{"type":"assistant/chunk","seq":21,"time":1788134400022,"data":{"turn":4,"step":4,"chunk":{"type":"finish","reason":{"kind":"stop"}}}}

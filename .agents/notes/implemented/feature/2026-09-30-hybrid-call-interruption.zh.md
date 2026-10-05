@@ -16,7 +16,7 @@ Host 只发起一个有上限、关闭思考的请求，不检索或重试。超
 
 完整辅助请求记录为 `speech/interruption-request`，标记 `ignorable: true`。它不产生对话消息，旧读取器可跳过而不改变历史重建。不修改 ASR、回答语言、RAG、TTS 或对话提示词设置。
 
-此决定部分取代[明确意图的通话打断](../bug-fix/2026-09-29-explicit-call-interruption.md)中的纯规则接纳；其完整回答筛选、拒绝输入临时保存、取消归属及续接依据继续有效。
+此决定部分取代[明确意图的通话打断](../bug-fix/2026-09-29-explicit-call-interruption.md)中的纯规则接纳；其完整回答筛选、拒绝输入临时保存及取消归属继续有效。[客户对话纠正](../bug-fix/2026-10-05-customer-dialogue-repair.md)规定接纳的消息，不改变接纳条件。
 
 ## Alternatives considered
 

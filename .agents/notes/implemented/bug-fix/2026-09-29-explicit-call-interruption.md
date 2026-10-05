@@ -16,7 +16,7 @@ The call controller screens input for the entire owned reply, including generati
 
 Only explicit stop commands or final assistant-directed correction and clarification forms can claim the turn. A partial stop command needs the configured confirmation interval measured from recognized text; other directed requests require a final transcript. Short exact echo and longer similar echo are checked before intent, including quoted stop commands. Text length and arbitrary questions never independently authorize cancellation. Standalone stop commands clear pending questions and keep listening without another model request; compound commands retain the follow-up question. Listening without an active reply still accepts normal questions through the existing utterance merge interval.
 
-This partially supersedes the admission criteria and playback-only activation in [context-aware call interruption](../feature/2026-09-15-context-aware-call-interruption.md). Its local screening, cancellation, manual interrupt, and interrupted-question continuation mechanisms remain active. ASR, answer-language selection, retrieval, and TTS providers retain their existing configuration.
+This partially supersedes the admission criteria and playback-only activation in [context-aware call interruption](../feature/2026-09-15-context-aware-call-interruption.md). Its local screening, cancellation and manual interrupt mechanisms remain active; [customer dialogue repair](2026-10-05-customer-dialogue-repair.md) governs post-interruption messages. ASR, answer-language selection, retrieval, and TTS providers retain their existing configuration.
 
 ## Alternatives considered
 

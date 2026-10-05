@@ -2,6 +2,13 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 
+const dialogueReplies: Readonly<Record<string, string>> = {
+  '你仲未稱呼我。': '唔好意思，請問你想我點稱呼你？',
+  '我姓陳，叫我陳小姐就得。': '陳小姐，你好。',
+  '唔係陳小姐，請叫我陳生。': '唔好意思，陳生，我會按你嘅意思稱呼你。',
+  'Thank you.': '唔使客氣，陳生。',
+}
+
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'customer-service-local-model'
 
@@ -12,7 +19,12 @@ export function apply(ctx: Context): void {
     globalThis.fetch = async (input, init): Promise<Response> => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       if (typeof init?.body !== 'string') throw new Error(`customer-service local model: ${url} has no JSON body`)
-      const body = JSON.parse(init.body) as { input?: unknown; documents?: unknown }
+      const body = JSON.parse(init.body) as {
+        input?: unknown
+        documents?: unknown
+        query?: string
+        messages?: { role: string; content: string }[]
+      }
       if (url.endsWith('/embeddings')) {
         if (!Array.isArray(body.input) || body.input.some(value => typeof value !== 'string')) {
           throw new Error('customer-service local model: embedding input must be a string array')
@@ -21,14 +33,20 @@ export function apply(ctx: Context): void {
           data: body.input.map((_value, index) => ({ index, embedding: [1, 0] })),
         })
       }
-      if (url.endsWith('/rerank')) {
+      if (url.endsWith('/rerank') || url.endsWith('/reranks')) {
         if (!Array.isArray(body.documents)) throw new Error('customer-service local model: rerank documents must be an array')
         return Response.json({
-          results: body.documents.map((_value, index) => ({ index, relevance_score: 1 - index / 100 })),
+          results: body.documents.map((_value, index) => ({
+            index,
+            relevance_score: process.env.DSH_CUSTOMER_SERVICE_FIXTURE === 'rag-dialogue'
+              && body.query !== undefined && Object.hasOwn(dialogueReplies, body.query) ? 0 : 1 - index / 100,
+          })),
         })
       }
       if (url.endsWith('/chat/completions')) {
-        const answer = '張電費單唔見咗唔緊要，你可以登入澳電網上服務、澳電App或者澳電微信服務，查返當月張單。'
+        const question = body.messages?.findLast(message => message.role === 'user' && Object.hasOwn(dialogueReplies, message.content))?.content ?? ''
+        const answer = (process.env.DSH_CUSTOMER_SERVICE_FIXTURE === 'rag-dialogue' ? dialogueReplies[question] : undefined)
+          ?? '張電費單唔見咗唔緊要，你可以登入澳電網上服務、澳電App或者澳電微信服務，查返當月張單。'
         return new Response([
           `data: ${JSON.stringify({ choices: [{ delta: { content: answer } }] })}`,
           `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 7, completion_tokens: 5 } })}`,

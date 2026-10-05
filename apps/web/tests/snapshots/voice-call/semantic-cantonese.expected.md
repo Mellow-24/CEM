@@ -4,9 +4,9 @@
   - heading "澳電智能客服" [level=2]
   - status: 客服正在回答…
   - text: 你
-  - paragraph: 我已經試過網上繳費，都係交唔到。
+  - paragraph: 唔係，我問你公司嘅地址。
   - text: 客服
-  - paragraph: 可以先確認付款有冇成功扣款，再聯絡銀行查詢失敗原因。
+  - paragraph: 你想查詢公司總部，定係客戶服務中心嘅地址？
   - paragraph: 開場白播放完成後即可提問，客服回答時也可以直接說話打斷。
   - button "掛斷語音通話":
     - img

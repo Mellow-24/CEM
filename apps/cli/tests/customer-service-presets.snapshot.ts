@@ -145,9 +145,9 @@ async function prepareWiki(): Promise<void> {
 /** Drive one complete customer-service turn and return its normalized durable log. */
 async function runPreset(
   preset: 'macau-customer-service' | 'macau-customer-service-wiki',
-  mode: 'rag' | 'wiki',
+  mode: 'rag' | 'wiki' | 'rag-dialogue',
   preference: 'auto' | 'en' = 'auto',
-  continuation?: string,
+  continuation?: string | readonly string[],
   prompt = '點樣取消自動轉賬？',
 ): Promise<string> {
   setFixtureEnvironment('DSH_CUSTOMER_SERVICE_FIXTURE', mode)
@@ -174,9 +174,9 @@ async function runPreset(
       source: { kind: 'user' },
     }))
     await handle.agent.whenIdle()
-    if (continuation !== undefined) {
+    for (const text of continuation === undefined ? [] : typeof continuation === 'string' ? [continuation] : continuation) {
       handle.agent.followup(createUserMessage({
-        content: [{ type: 'text', text: continuation }],
+        content: [{ type: 'text', text }],
         source: { kind: 'user' },
       }))
       await handle.agent.whenIdle()
@@ -212,6 +212,34 @@ afterAll(async () => {
 })
 
 describe('shipped customer-service preset transcripts', () => {
+  it('keeps requested forms of address and corrections separate from missing business evidence', async () => {
+    const actual = await runPreset('macau-customer-service', 'rag-dialogue', 'auto', [
+      '你仲未稱呼我。',
+      '我姓陳，叫我陳小姐就得。',
+      '唔係陳小姐，請叫我陳生。',
+      'Thank you.',
+    ], '我弄丢电费单了，怎么办？')
+    const expected = join(snapshots, 'rag-dialogue.expected.jsonl')
+    if (refreshing) {
+      await mkdir(dirname(expected), { recursive: true })
+      await writeFile(expected, actual)
+    }
+    expect(actual).toBe(await readFile(expected, 'utf8'))
+    const rows = actual.trim().split('\n').map(line => JSON.parse(line) as {
+      type: string
+      data?: { status?: string; reranked?: boolean; query?: string; sourceCount?: number }
+    })
+    const retrievals = rows.filter(row => row.type === 'customer-service-knowledge/retrieval')
+    expect(retrievals).toHaveLength(5)
+    const dialogue = ['你仲未稱呼我。', '我姓陳，叫我陳小姐就得。', '唔係陳小姐，請叫我陳生。', 'Thank you.']
+    for (const [index, query] of dialogue.entries()) {
+      expect(retrievals[index + 1]?.data).toMatchObject({ query, status: 'not-found', sourceCount: 0, reranked: true })
+    }
+    expect(actual).toContain('唔好意思，請問你想我點稱呼你？')
+    expect(actual).toContain('唔使客氣，陳生。')
+    expect(actual).not.toContain('"isError":true')
+  })
+
   it('retrieves a colloquial lost-bill alias and returns a spoken Macau Cantonese answer', async () => {
     const actual = await runPreset('macau-customer-service', 'rag', 'auto', undefined, '我弄丢电费单了，怎么办？')
     const expected = join(snapshots, 'rag.expected.jsonl')

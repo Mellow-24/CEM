@@ -12,7 +12,7 @@ Stopping an audible answer on the first nonempty ASR hypothesis confuses recogni
 
 The shared browser voice controller screens recognized text locally before cancelling an answer. Speech onset starts a candidate and keeps recognition active without stopping playback. The admission criteria, confirmation clock, and activation window are governed by [explicit call interruption](../bug-fix/2026-09-29-explicit-call-interruption.md), which supersedes playback-only screening and length-based turn claims.
 
-Classification uses ASR finality, explicit request form, whole-utterance backchannel structure, and similarity to the active answer. Rejected hypotheses do not enter Session history. A confirmed interruption keeps the existing cancellation, interrupted-question carry-forward, and final-segment merge behavior. The manual interrupt action remains immediate.
+Classification uses ASR finality, explicit request form, whole-utterance backchannel structure, and similarity to the active answer. Rejected hypotheses do not enter Session history. A confirmed interruption keeps cancellation and final-segment merging; [customer dialogue repair](../bug-fix/2026-10-05-customer-dialogue-repair.md) governs the submitted text. The manual interrupt action remains immediate.
 
 The Host advertises deployment timing and thresholds under `call.interruption`. The [voice client](../../../../packages/client/ui-voice/README.md#voice-calls) owns their current interpretation.
 
@@ -28,6 +28,6 @@ The Host advertises deployment timing and thresholds under `call.interruption`. 
 
 ## Consequences
 
-Local screening adds no model request. Explicit interruption retains cancellation and continuation behavior; the superseding policy narrows which utterances can enter that path. The classifier does not verify speaker identity. Unit tests pin acknowledgement removal, playback similarity, continuation cancellation, profile validation, and Host advertisement.
+Local screening adds no model request. Explicit interruption retains cancellation and same-utterance merging; the superseding policy narrows which utterances can enter that path. The classifier does not verify speaker identity. Unit tests pin acknowledgement removal, playback similarity, cancellation, profile validation, and Host advertisement.
 
-This partially supersedes the recognized-text interruption decision in [call history and interrupted-question continuations](../bug-fix/2026-09-14-call-history-and-continuations.md); its transcript retention, carry-forward, merge interval, and durable Session admission remain active.
+This partially supersedes the recognized-text interruption decision in [call history and interrupted-question continuations](../bug-fix/2026-09-14-call-history-and-continuations.md); its transcript retention, merge interval, and durable Session admission remain active.

@@ -24,8 +24,14 @@ const PROMPT = '我現在的自動轉賬\n失敗了怎麼辦？'
 const FIXTURE = fileURLToPath(new URL('./snapshots/voice-call/session.jsonl', import.meta.url))
 const STALE_QUESTION = '我想查另一張賬單。'
 const SEMANTIC_QUESTIONS = {
-  cantonese: { text: '我已經試過網上繳費，都係交唔到。', reply: '可以先確認付款有冇成功扣款，再聯絡銀行查詢失敗原因。' },
-  english: { text: "What if I don't have a bank account?", reply: 'You can pay your electricity bill at a customer service centre.' },
+  cantonese: [
+    { text: '我已經試過網上繳費，都係交唔到。', reply: '可以先確認付款有冇成功扣款，再聯絡銀行查詢失敗原因。' },
+    { text: '唔係，我想問你個鋪頭\n嘅地址。', reply: '你想查詢邊間客戶服務中心嘅地址？' },
+    { text: '唔係，我問你公司嘅地址。', reply: '你想查詢公司總部，定係客戶服務中心嘅地址？' },
+  ],
+  english: [
+    { text: "What if I don't have a bank account?", reply: 'You can pay your electricity bill at a customer service centre.' },
+  ],
 } as const
 
 interface InterruptionFixtureRequest {
@@ -60,7 +66,7 @@ class InterruptionFixtureAdapter extends LlmAdapter {
     })
     this.requests.push({ input, signal, release })
     const positive = input.utterance === STALE_QUESTION
-      || Object.values(SEMANTIC_QUESTIONS).some(question => question.text === input.utterance)
+      || Object.values(SEMANTIC_QUESTIONS).flat().some(question => question.text === input.utterance)
     if (!positive) release()
     try { await pending } finally { signal.removeEventListener('abort', abort) }
     const text = JSON.stringify({ decision: positive ? 'interrupt' : 'continue' })
@@ -253,7 +259,7 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
         maxInputChars: 2400, maxOutputTokens: 32, maxConcurrent: 4,
       } } },
     } }]))
-    const semanticQuestion = semanticLanguage === undefined ? undefined : SEMANTIC_QUESTIONS[semanticLanguage]
+    const semanticQuestions = semanticLanguage === undefined ? [] : SEMANTIC_QUESTIONS[semanticLanguage]
     const scaffold = await launchWebScaffold({
       replayFixture: semanticLanguage === undefined ? FIXTURE
         : fileURLToPath(new URL(`./snapshots/voice-call/semantic-${semanticLanguage}.session.jsonl`, import.meta.url)),
@@ -332,6 +338,10 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
         .filter(event => event.type === 'assistant/message').length
       const submittedPrompts = () => scaffold.ctx.agents.roots().flatMap(agent => agent.session.events)
         .filter(event => event.type === 'user/message' && event.data.source.kind === 'user').length
+      const submittedPromptTexts = () => scaffold.ctx.agents.roots().flatMap(agent => agent.session.events)
+        .flatMap(event => event.type === 'user/message' && event.data.source.kind === 'user'
+          ? [event.data.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')]
+          : [])
       expect(completedReplies()).toBe(0)
       expect(await page.evaluate(() => {
         const media = Reflect.get(window, '__voiceMedia') as Set<HTMLMediaElement>
@@ -376,6 +386,7 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
       await expect.poll(() => ttsTexts.length, { timeout: 15000 }).toBeGreaterThanOrEqual(1)
       await dialog.getByText(labels.speaking, { exact: true }).waitFor()
       await expect.poll(completedReplies, { timeout: 15000 }).toBe(1)
+      expect(submittedPromptTexts()).toEqual([PROMPT])
       if (preset === 'macau-customer-service') expect(retrievalRequests).toContain('/rerank')
       const callContext = scaffold.ctx.agents.roots().flatMap(agent => agent.session.events)
         .find(event => event.type === 'user/message'
@@ -404,7 +415,7 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
         return Math.abs(container.scrollHeight - container.clientHeight - container.scrollTop) < 2
       })
       await expect.poll(captionsAtBottom).toBe(true)
-      if (semanticQuestion !== undefined) {
+      if (semanticQuestions.length > 0) {
         socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
         socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: STALE_QUESTION }))
         await expect.poll(() => classifier.requests.length).toBe(1)
@@ -453,21 +464,33 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
         await expect.poll(captionsAtBottom).toBe(true)
         await page.screenshot({ path: '/tmp/dsh-realtime-mobile.png' })
       }
-      if (semanticQuestion !== undefined) {
-        const requestsBefore = classifier.requests.length
-        socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
-        socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: semanticQuestion.text, stash: '' }))
-        socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: semanticQuestion.text }))
-        await expect.poll(() => classifier.requests.length).toBe(requestsBefore + 1)
-        const request = classifier.requests.at(-1)!
-        expect(request.input.utterance).toBe(semanticQuestion.text)
-        expect(await dialog.getByText(labels.speaking, { exact: true }).count()).toBe(1)
-        expect(submittedPrompts()).toBe(1)
-        request.release()
-        await expect.poll(submittedPrompts, { timeout: 10000 }).toBe(2)
-        await expect.poll(completedReplies, { timeout: 15000 }).toBe(2)
-        await dialog.getByText(semanticQuestion.text, { exact: true }).waitFor()
-        await dialog.getByText(semanticQuestion.reply, { exact: true }).waitFor()
+      if (semanticQuestions.length > 0) {
+        const expectedPrompts = [PROMPT]
+        for (const semanticQuestion of semanticQuestions) {
+          await dialog.getByText(labels.speaking, { exact: true }).waitFor()
+          const requestsBefore = classifier.requests.length
+          for (const segment of semanticQuestion.text.split('\n')) {
+            socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
+            socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: segment, stash: '' }))
+            socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: segment }))
+          }
+          await expect.poll(() => classifier.requests.at(-1)?.input.utterance).toBe(semanticQuestion.text)
+          for (const superseded of classifier.requests.slice(requestsBefore, -1)) {
+            await expect.poll(() => superseded.signal.aborted).toBe(true)
+          }
+          const request = classifier.requests.at(-1)!
+          expect(request.input.utterance).toBe(semanticQuestion.text)
+          expect(request.input.question).toBe(expectedPrompts.at(-1))
+          expect(await dialog.getByText(labels.speaking, { exact: true }).count()).toBe(1)
+          expect(submittedPromptTexts()).toEqual(expectedPrompts)
+          request.release()
+          expectedPrompts.push(semanticQuestion.text)
+          await expect.poll(submittedPrompts, { timeout: 10000 }).toBe(expectedPrompts.length)
+          await expect.poll(completedReplies, { timeout: 15000 }).toBe(expectedPrompts.length)
+          expect(submittedPromptTexts()).toEqual(expectedPrompts)
+          await dialog.getByText(semanticQuestion.text, { exact: true }).waitFor()
+          await dialog.getByText(semanticQuestion.reply, { exact: true }).waitFor()
+        }
         const semanticAria = (await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd))
           .replace(/\b\d{2}:\d{2}\b/g, '00:00')
         await compareOrRefreshGolden(fileURLToPath(new URL(`./snapshots/voice-call/semantic-${semanticLanguage}.expected.md`, import.meta.url)), semanticAria, MODE)
@@ -501,7 +524,7 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
       }
       const framesAfterFallback = pcmFrames
       await expect.poll(() => pcmFrames, { timeout: 5000 }).toBeGreaterThan(framesAfterFallback)
-      if (semanticQuestion === undefined) {
+      if (semanticQuestions.length === 0) {
         socket!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }))
         socket!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.text', text: '', stash: 'Still connected' }))
         await dialog.getByText('Still connected', { exact: true }).waitFor()
@@ -511,7 +534,10 @@ describe.skipIf(MODE === 'record')('web voice calls', () => {
       await dialog.waitFor({ state: 'hidden' })
       await page.getByText(PROMPT, { exact: true }).last().waitFor()
       await page.getByText(REPLY, { exact: true }).last().waitFor()
-      if (semanticQuestion !== undefined) await page.getByText(semanticQuestion.reply, { exact: true }).last().waitFor()
+      for (const semanticQuestion of semanticQuestions) {
+        await page.getByText(semanticQuestion.text, { exact: true }).last().waitFor()
+        await page.getByText(semanticQuestion.reply, { exact: true }).last().waitFor()
+      }
       await page.reload()
       if (customer) await page.getByRole('button', { name: /^開啟對話：/ }).first().click()
       await page.getByText(REPLY, { exact: true }).last().waitFor({ timeout: 15000 })
