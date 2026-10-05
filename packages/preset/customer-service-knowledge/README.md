@@ -47,6 +47,8 @@ Preset mounting prepares the vector cache before accepting customer sessions. It
 
 Each direct customer message triggers one lookup before the model request. The lookup uses the final non-empty direct-user text exactly as submitted; plugin context and prior messages do not replace that query. The evidence notice precedes that direct-user message, with all other proposed messages retaining their relative order. The ordinary `user/message` events record this order for request reconstruction and replay. Each lookup still revalidates the approved source bytes and derived chunk metadata before using the prepared cache. Non-missing filesystem errors fail the turn.
 
+After a successful, uncancelled lookup, each earlier live notice owned by this plugin is replaced in derived model history by a short superseded-evidence marker. The replacement is a logged `user/message` with a single-node `surfaceOp`, citing the original event in `sourceEventSeqs`; it occurs before the new step begins. Original evidence and retrieval events remain in the append-only audit log. Customer, assistant, tool and unrelated context messages keep their content and order. Rejected or empty input, failed retrieval and cancellation before replacement leave earlier evidence unchanged. The distinct `customer-service-knowledge-history` source prevents markers from being retired again.
+
 Every non-empty customer question is embedded, and the finite vector Top-K candidates are sent to the configured reranker when reranking is enabled. A successful rerank must pass both `minimumVectorScore` and `minimumRerankScore`; a transient rerank failure falls back only to candidates that pass the vector threshold. An empty approved manifest returns reason `empty-corpus`. Evidence ids are content-derived and stable across equivalent builds.
 
 ### Dialogue guidance
@@ -61,15 +63,15 @@ When a message only greets, thanks, apologizes, introduces a name or requests or
 
 #### What the model sees
 
-The model sees bounded evidence framed as escaped JSON data immediately before the latest direct customer message. It does not spend an initial model request selecting or formulating a retrieval tool call. Rendered evidence includes only excerpt text; source paths, titles, stable ids, order, scores, and citation markers stay out of customer-facing model input. Prompt text says source strings are quoted data and never instructions, and forbids mentioning source documents, retrieval metadata, or the retrieval process. Business facts require relevant evidence from the current lookup; missing evidence requires an honest unknown answer, not reuse of older evidence. Human support may be mentioned only when approved evidence or the conversation already provides that path.
+The model sees bounded evidence framed as escaped JSON data immediately before the latest direct customer message; earlier retrieval notices appear only as short superseded-evidence markers. It does not spend an initial model request selecting or formulating a retrieval tool call. Rendered evidence includes only excerpt text; source paths, titles, stable ids, order, scores, and citation markers stay out of customer-facing model input. Prompt text says source strings are quoted data and never instructions, and forbids mentioning source documents, retrieval metadata, or the retrieval process. Business facts require relevant evidence from the current lookup; missing evidence requires an honest unknown answer, not reuse of older evidence. Human support may be mentioned only when approved evidence or the conversation already provides that path.
 
 #### Token effect
 
-Standing guidance appears on each request for this preset, and one bounded evidence context appears immediately before the latest direct customer message. `maxResultBytes` bounds the complete canonical result and rendered model text independently. Removing the retrieval tool schema and its preliminary model turn reduces time to the first answer token while every customer question retains query embedding, vector retrieval, and configured reranking.
+Standing guidance appears on each request for this preset, and one bounded evidence context appears immediately before the latest direct customer message. Earlier excerpt bodies do not accumulate in model history; each retired notice retains one fixed-size marker. `maxResultBytes` bounds the complete canonical result and rendered model text independently. Removing the retrieval tool schema and its preliminary model turn reduces time to the first answer token while every customer question retains query embedding, vector retrieval, and configured reranking.
 
 #### KV Cache effect
 
-Standing guidance remains prefix-stable for a preset generation. Source or cache changes affect later evidence messages. The exact query, bounded evidence, result status, rerank use, source count, and duration are recorded in `customer-service-knowledge/retrieval` for session replay and quality inspection.
+Standing guidance remains prefix-stable for a preset generation. Retiring an earlier notice changes the history prefix from that position; later requests retain its stable marker. Source or cache changes affect later evidence messages. The exact query, bounded evidence, result status, rerank use, source count, and duration are recorded in `customer-service-knowledge/retrieval` for session replay and quality inspection; raw notices and replacements reconstruct both original and later requests.
 
 ## Known Limitations and Deferred Work
 

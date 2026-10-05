@@ -98,6 +98,22 @@ function validateEvent(
   fail: InvariantFailure,
 ): void {
   if (event.type === EVENT_TYPE) validateRetrieval(history, event, fail)
+  if (event.type !== 'user/message' || event.data.source.kind !== 'plugin'
+    || event.data.source.plugin !== 'customer-service-knowledge-history') return
+  const replacement = event.surfaceOp
+  if (replacement === undefined || replacement === 'append' || replacement.start !== replacement.end
+    || event.sourceEventSeqs?.length !== 1 || event.sourceEventSeqs[0] !== replacement.start) {
+    fail('knowledge history marker must replace and cite exactly one earlier evidence notice')
+  }
+  const original = history[replacement.start]
+  if (original?.type !== 'user/message' || original.data.source.kind !== 'plugin'
+    || original.data.source.plugin !== SOURCE_NAME || original.data.source.form !== 'notice') {
+    fail('knowledge history marker may replace only an earlier company-knowledge notice')
+  }
+  if (history.findLastIndex(candidate => candidate.type === 'step/start')
+    > history.findLastIndex(candidate => candidate.type === 'step/end')) {
+    fail('knowledge history marker must precede the next step')
+  }
 }
 
 /** Validate all existing automatic retrieval events in one session. */

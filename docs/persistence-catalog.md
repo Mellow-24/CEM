@@ -420,7 +420,7 @@ Source: [`packages/host/customer-service-admin/src/quality-engine.ts:21`](../pac
 'customer-service-knowledge/retrieval': CustomerServiceKnowledgeRetrievalEvent
 ```
 
-Source: [`packages/preset/customer-service-knowledge/src/index.ts:61`](../packages/preset/customer-service-knowledge/src/index.ts)
+Source: [`packages/preset/customer-service-knowledge/src/index.ts:62`](../packages/preset/customer-service-knowledge/src/index.ts)
 
 ### `feedback/*`
 

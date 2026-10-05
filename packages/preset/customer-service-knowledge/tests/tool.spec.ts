@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents, Inbox, type Agent } from '@deepseek-ai/dsh-agent'
-import { createAssistantMessage, createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { CallId, createAssistantMessage, createToolResultMessage, createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
+import { decodeStorageRecord, packChunkRuns, Session, SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as KnowledgePlugin from '../src/index.ts'
@@ -19,6 +19,7 @@ import type { KnowledgeSearchResult, KnowledgeSource } from '../src/evidence.ts'
 const temporaryDirectories: string[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   await Promise.all(temporaryDirectories.splice(0).map(directory => rm(directory, { recursive: true, force: true })))
 })
@@ -388,6 +389,113 @@ describe('customer-service knowledge plugin', () => {
     await ctx.fiber.dispose()
   })
 
+  it('retires only previous live evidence while preserving conversation order and durable replay', async () => {
+    const ctx = new Context()
+    await ctx.plugin(AgentRegistry)
+    await ctx.plugin(SystemPrompt, {})
+    await ctx.plugin(KnowledgePlugin, await emptyConfig())
+    const old = Session.create(SessionId('old-knowledge-history'))
+    const oldEvidence = old.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'OLD EVIDENCE '.repeat(1_000) }],
+      source: { kind: 'plugin', plugin: KnowledgePlugin.name, form: 'notice', summary: 'Old evidence' },
+    }), { surfaceOp: 'append' })
+    old.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'Where is your office?' }], source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    old.append('assistant/message', {
+      turn: 1, step: 1,
+      message: createAssistantMessage({
+        content: [{ type: 'text', text: 'The office is on the address previously supplied.' }],
+        source: { provider: 'customer-route', model: 'customer-flash' },
+      }),
+    }, { surfaceOp: 'append', sourceEventSeqs: [] })
+    old.append('tool/result', {
+      turn: 1, step: 1,
+      message: createToolResultMessage({
+        callId: CallId('past-tool'), content: [{ type: 'text', text: 'KEEP TOOL RESULT' }], isError: false,
+      }),
+    }, { surfaceOp: 'append' })
+    for (const source of [
+      { kind: 'plugin' as const, plugin: 'another-context', form: 'notice' as const, summary: 'Other notice' },
+      { kind: 'plugin' as const, plugin: KnowledgePlugin.name, form: 'instructions' as const },
+    ]) old.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'KEEP OTHER CONTEXT' }], source,
+    }), { surfaceOp: 'append' })
+    const preserved = old.deriveMessages().slice(1)
+    const session = Session.fromRestore(old.id, structuredClone(old.events), structuredClone(old.header))
+    const { messages } = await retrieve(ctx, sessionAgent(session), 'Please call me Alex.', 2)
+    const replacement = session.events.find(event => event.type === 'user/message'
+      && event.data.source.kind === 'plugin' && event.data.source.plugin === 'customer-service-knowledge-history')
+    expect(replacement).toMatchObject({
+      type: 'user/message',
+      surfaceOp: { op: 'replace', start: oldEvidence.seq, end: oldEvidence.seq },
+      sourceEventSeqs: [oldEvidence.seq],
+      data: { content: [{ type: 'text', text: 'Earlier company-knowledge evidence has been superseded by the current lookup.' }] },
+    })
+    expect(replacement!.seq).toBeLessThan(session.events.find(event => event.type === 'step/start')!.seq)
+    const derived = session.deriveMessages()
+    expect(derived.slice(1, 1 + preserved.length)).toEqual(preserved)
+    expect(derived.slice(-2)).toEqual(messages)
+    expect(JSON.stringify(derived)).not.toContain('OLD EVIDENCE')
+    expect(session.events[oldEvidence.seq]).toEqual(oldEvidence)
+
+    session.append('step/end', { turn: 2, step: 1 })
+    session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+    await retrieve(ctx, sessionAgent(session), 'Thank you.', 3)
+    const liveNotices = session.surface.nodes.flatMap((seq) => {
+      const event = session.events[seq]
+      return event?.type === 'user/message' && event.data.source.kind === 'plugin'
+        && event.data.source.plugin === KnowledgePlugin.name && event.data.source.form === 'notice' ? [event] : []
+    })
+    expect(liveNotices).toHaveLength(1)
+    const replacements = session.events.flatMap(event => event.type === 'user/message' && event.surfaceOp !== 'append' ? [event] : [])
+    expect(replacements).toHaveLength(2)
+    expect(replacements.every(event => event.sourceEventSeqs?.length === 1)).toBe(true)
+    const decoded = packChunkRuns(session.events).flatMap(row => decodeStorageRecord(JSON.parse(JSON.stringify(row))))
+    const restored = Session.fromRestore(session.id, decoded, structuredClone(session.header))
+    expect(restored.deriveMessages()).toEqual(session.deriveMessages())
+    expect(restored.events[oldEvidence.seq]).toEqual(oldEvidence)
+    await ctx.fiber.dispose()
+  })
+
+  it.each(['reject', 'empty', 'already-aborted', 'search-aborted', 'search-failed'] as const)(
+    'preserves prior evidence when the next lookup is %s', async (outcome) => {
+      const ctx = new Context()
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(SystemPrompt, {})
+      await ctx.plugin(KnowledgePlugin, await emptyConfig())
+      const session = Session.create(SessionId(`unretired-${outcome}`))
+      session.append('user/message', createUserMessage({
+        content: [{ type: 'text', text: 'PRESERVE PRIOR EVIDENCE' }],
+        source: { kind: 'plugin', plugin: KnowledgePlugin.name, form: 'notice', summary: 'Old evidence' },
+      }), { surfaceOp: 'append' })
+      const events = session.events
+      const controller = new AbortController()
+      if (outcome === 'already-aborted') controller.abort()
+      const search = vi.spyOn(KnowledgePlugin.LocalKnowledgeIndex.prototype, 'search').mockImplementationOnce(async () => {
+        if (outcome === 'search-failed') throw new Error('search failed')
+        controller.abort()
+        return { status: 'not-found', reason: 'empty-corpus', sources: [], reranked: false }
+      })
+      const messages = [createUserMessage({
+        content: [{ type: 'text', text: outcome === 'empty' ? ' ' : 'Hello' }], source: { kind: 'user' },
+      })]
+      const pending = agentEvents(ctx, sessionAgent(session)).waterfall('agent/pre-step', {
+        messages, turn: 2, step: 1, signal: controller.signal,
+      }, () => Promise.resolve(outcome === 'reject'
+        ? { kind: 'reject' as const }
+        : { kind: 'enter' as const, messages }))
+      if (outcome === 'search-aborted' || outcome === 'search-failed') await expect(pending).rejects.toThrow()
+      else {
+        await pending
+        expect(search).not.toHaveBeenCalled()
+      }
+      expect(session.events).toEqual(events)
+      expect(session.deriveMessages()[0]?.content).toEqual([{ type: 'text', text: 'PRESERVE PRIOR EVIDENCE' }])
+      await ctx.fiber.dispose()
+    },
+  )
+
   it('uses the final non-empty direct-user text and rejects invalid retrieval deadlines', async () => {
     expect(KnowledgePlugin.directCustomerQuery([
       createUserMessage({ content: [{ type: 'text', text: 'first' }], source: { kind: 'user' } }),
@@ -428,9 +536,17 @@ describe('customer-service knowledge plugin', () => {
     const handle = ctx.plugin(KnowledgePlugin, pluginConfig)
     await handle
     const session = Session.create(SessionId('reranker-fallback'))
-    await retrieve(ctx, sessionAgent(session), '营业')
+    session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'UNRELATED OLD EVIDENCE' }],
+      source: { kind: 'plugin', plugin: KnowledgePlugin.name, form: 'notice', summary: 'Old evidence' },
+    }), { surfaceOp: 'append' })
+    const { messages } = await retrieve(ctx, sessionAgent(session), '营业')
     const event = session.events.find(candidate => candidate.type === 'customer-service-knowledge/retrieval')
     expect(event?.data).toMatchObject({ status: 'found', reranked: false })
+    expect(event?.data.evidence).toContain('营业。')
+    expect(session.deriveMessages().slice(-2)).toEqual(messages)
+    expect(session.deriveMessages().at(-2)?.content).toEqual([{ type: 'text', text: event?.data.evidence }])
+    expect(JSON.stringify(session.deriveMessages())).not.toContain('UNRELATED OLD EVIDENCE')
     expect(warning).toHaveBeenCalledWith(expect.stringContaining('reranker request failed'))
     await handle.dispose()
     await ctx.fiber.dispose()

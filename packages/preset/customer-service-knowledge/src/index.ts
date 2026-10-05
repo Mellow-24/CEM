@@ -13,6 +13,7 @@ import type { PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import { createUserMessage, ReasoningEffortId, type UserMessage } from '@deepseek-ai/dsh-llm'
+import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { renderKnowledgeResult } from './evidence.ts'
@@ -154,6 +155,26 @@ export function directCustomerQuery(messages: readonly UserMessage[]): string | 
 
 type PendingRetrieval = CustomerServiceKnowledgeRetrievalEvent
 
+/** Retire only live evidence notices; original events remain available for request reconstruction. */
+function retireEarlierEvidence(session: Session): void {
+  const events = session.events
+  for (const seq of [...session.surface.nodes]) {
+    const event = events[seq]
+    if (event?.type !== 'user/message' || event.data.source.kind !== 'plugin'
+      || event.data.source.plugin !== name || event.data.source.form !== 'notice') continue
+    session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'Earlier company-knowledge evidence has been superseded by the current lookup.' }],
+      source: {
+        kind: 'plugin', plugin: 'customer-service-knowledge-history', form: 'notice',
+        summary: 'Earlier company knowledge superseded',
+      },
+    }), {
+      surfaceOp: { op: 'replace', start: seq, end: seq },
+      sourceEventSeqs: [seq],
+    })
+  }
+}
+
 /**
  * Register automatic retrieval and its standing model instructions.
  * @param ctx - customer-service Agent scope.
@@ -187,6 +208,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const result = await index.search(query, retrievalSignal)
     retrievalSignal.throwIfAborted()
     const evidence = renderKnowledgeResult(result)
+    retireEarlierEvidence(agent.session)
     pending.set(agent.session, {
       turn,
       step,

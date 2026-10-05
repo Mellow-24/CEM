@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore from '@deepseek-ai/dsh-session'
+import SessionStore, { Session } from '@deepseek-ai/dsh-session'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import { describe, expect, it } from 'vitest'
 import * as KnowledgeInvariant from '../src/invariant.ts'
@@ -81,6 +81,51 @@ describe('automatic knowledge retrieval invariants', () => {
     session.append('customer-service-knowledge/retrieval', retrieval())
     expect(() => session.append('customer-service-knowledge/retrieval', retrieval()))
       .toThrow(/at most once/)
+    await ctx.fiber.dispose()
+  })
+
+  it('accepts evidence retirement between steps and retains the original retrieval audit on reload', async () => {
+    const ctx = await setup()
+    const session = openStep(ctx, 'after')
+    session.append('customer-service-knowledge/retrieval', retrieval())
+    session.append('step/end', { turn: 1, step: 1 })
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    const original = session.events.find(event => event.type === 'user/message'
+      && event.data.source.kind === 'plugin')!
+    session.append('turn/start', { turn: 2 })
+    session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'Earlier evidence superseded.' }],
+      source: { kind: 'plugin', plugin: 'customer-service-knowledge-history', form: 'notice', summary: 'Superseded' },
+    }), {
+      surfaceOp: { op: 'replace', start: original.seq, end: original.seq }, sourceEventSeqs: [original.seq],
+    })
+    const restored = Session.fromRestore(session.id, structuredClone(session.events), structuredClone(session.header))
+    expect(restored.deriveMessages()).toEqual(session.deriveMessages())
+    expect(() => ctx.sessions.create(undefined, { seed: structuredClone(session.events) })).not.toThrow()
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects history markers that replace customer text or are appended inside a step', async () => {
+    const ctx = await setup()
+    const session = openStep(ctx)
+    const marker = createUserMessage({
+      content: [{ type: 'text', text: 'Earlier evidence superseded.' }],
+      source: { kind: 'plugin', plugin: 'customer-service-knowledge-history', form: 'notice', summary: 'Superseded' },
+    })
+    const customer = session.events.find(event => event.type === 'user/message' && event.data.source.kind === 'user')!
+    const evidence = session.events.find(event => event.type === 'user/message' && event.data.source.kind === 'plugin')!
+    expect(() => session.append('user/message', marker, {
+      surfaceOp: { op: 'replace', start: customer.seq, end: customer.seq }, sourceEventSeqs: [customer.seq],
+    })).toThrow(/only an earlier company-knowledge notice/)
+    expect(() => session.append('user/message', marker, {
+      surfaceOp: { op: 'replace', start: evidence.seq, end: evidence.seq }, sourceEventSeqs: [evidence.seq],
+    })).toThrow(/precede the next step/)
+    session.append('step/end', { turn: 1, step: 1 })
+    expect(() => session.append('user/message', marker, { surfaceOp: 'append' })).toThrow(/exactly one/)
+    expect(() => session.append('user/message', marker, {
+      surfaceOp: { op: 'replace', start: evidence.seq, end: customer.seq },
+      sourceEventSeqs: [evidence.seq, customer.seq],
+    })).toThrow(/exactly one/)
     await ctx.fiber.dispose()
   })
 })

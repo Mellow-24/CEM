@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-05-customer-dialogue-repair.md
-2026-10-05-customer-dialogue-repair.md: 122a9f19ab8c83c75e84dfb9a50f644fe8e41bc6
-2026-10-05-customer-dialogue-repair.zh.md: 6dbade2f93f483149b4b3bc83c077a738a190769
+2026-10-05-customer-dialogue-repair.md: a409202ed2e43c92bdb1838158c50114d7a7d0df
+2026-10-05-customer-dialogue-repair.zh.md: 490423d69e2273d8d4845b11cb9c1a357ae5f9ea
